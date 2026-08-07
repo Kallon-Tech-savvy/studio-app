@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "studio-app",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-06",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // The Vite build output. Cloudflare serves these directly at the edge;
+  // any request that doesn't match a static file falls through to the
+  // Worker (see the catch-all route in worker/index.ts).
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
+  },
+
+  // Photo masters + any derivatives you choose to cache. $0 egress.
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "studio-photos"
+    }
+  ],
+
+  // Fires roughly every 3 days, well inside Supabase's 7-day
+  // inactivity window, so the free-tier project never auto-pauses.
+  // Cron Triggers run on UTC.
+  "triggers": {
+    "crons": ["0 6 */3 * *"]
+  },
+
+  "vars": {
+    "ENVIRONMENT": "production"
+  }
+
+  // Secrets (SUPABASE_URL, SUPABASE_ANON_KEY, UPSTASH_REDIS_REST_URL,
+  // UPSTASH_REDIS_REST_TOKEN) are NOT set here — see README.md for
+  // `wrangler secret put` and .dev.vars for local dev.
+}
