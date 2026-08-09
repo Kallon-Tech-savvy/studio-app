@@ -7,9 +7,31 @@ Everything below fits inside the free tier of each service.
 This is v1 wiring, not the final design or the full feature set — see
 "Not built yet" at the bottom.
 
+## Design
+
+The UI leans into what this actually is — a contact sheet for client
+galleries — rather than a generic app template:
+
+- **Palette:** a paper-toned background, near-black ink for text and
+  rules, and a single darkroom safelight red as the only accent (used
+  for focus states, hover, and links — nowhere else).
+- **Type:** Barlow Condensed for headings, IBM Plex Sans for body text,
+  IBM Plex Mono for frame numbers and metadata — loaded via Google
+  Fonts in `index.html`.
+- **Motif:** a sprocket-hole strip divides each "roll" (gallery), and
+  photos fade in from a slight blur when they load, like a print
+  developing, instead of a generic hover animation.
+
+All of it lives in `src/index.css` as CSS custom properties (`--paper`,
+`--ink`, `--safelight`, etc.) at the top of the file — change those five
+values and the whole palette follows. "Proof," "Roll," "Frame," and
+"Darkroom" are placeholder names threaded through the copy in `App.tsx`,
+`AdminPanel.tsx`, and `LoginForm.tsx` — swap them for your studio's own
+name and vocabulary whenever you're ready.
+
 ## Layout
 
-
+```
 studio-app/
 ├── wrangler.jsonc         # Worker config: assets, R2 binding, cron trigger
 ├── worker/
@@ -20,8 +42,13 @@ studio-app/
 │       └── redis.ts       # Upstash Redis client
 ├── src/                   # React frontend
 │   ├── main.tsx
-│   ├── App.tsx             # Wiring-check placeholder page
-│   └── lib/supabase.ts    # Browser-side Supabase client (anon key)
+│   ├── App.tsx             # Public gallery list + logged-in/out switch
+│   ├── LoginForm.tsx        # Magic-link email form
+│   ├── AdminPanel.tsx       # Create gallery + upload photo (signed-in only)
+│   ├── AuthedImage.tsx      # Fetches a photo with auth (if any) as a blob URL
+│   └── lib/
+│       ├── supabase.ts     # Browser-side Supabase client (anon key)
+│       └── useSession.ts    # Tracks the current auth session
 ├── supabase/
 │   └── schema.sql          # heartbeat + galleries + photos, with RLS
 ├── .dev.vars.example       # Worker secrets template (local dev)
@@ -72,13 +99,26 @@ provider's dashboard and save.
 Either way this raises Supabase's own auth email rate limit from 2/hour
 to 30/hour (adjustable later under Authentication → Rate Limits).
 
-## 5. Create the Upstash Redis database
+## 5. Point Supabase Auth at where the app actually runs
+
+The magic-link email redirects back to your **Site URL**. Project Settings
+→ Authentication → URL Configuration:
+
+- **Site URL:** `http://localhost:5173` for local dev (Vite's default
+  port). Change this to your real domain before you deploy, or add both
+  as entries under **Redirect URLs** so local dev keeps working alongside
+  production.
+
+If this doesn't match where you're actually running the app, the link in
+the email will 404 or land on the wrong origin.
+
+## 6. Create the Upstash Redis database
 
 New database at upstash.com — free tier. Copy the **REST URL** and
 **REST token** from the database details page (not the TCP endpoint —
 the Cloudflare-compatible client here talks HTTP).
 
-## 6. Local dev
+## 7. Local dev
 
 ```bash
 cp .dev.vars.example .dev.vars   # Worker secrets
@@ -91,7 +131,15 @@ npm run dev
 the real Workers runtime — R2, the cron trigger, bindings all behave as
 they would in production.
 
-## 7. Set secrets for the deployed Worker
+**Try the full loop:** open the app, enter your email, click the magic
+link when it arrives, then use the admin panel to create a gallery
+(check "Public" to have it show up above) and upload a photo — it
+should appear as a thumbnail right in the admin panel. If you marked
+the gallery public, expand it in the list above to see the same photo
+load with no login at all. That exercises Auth, both API routes, R2,
+and RLS in one pass.
+
+## 8. Set secrets for the deployed Worker
 
 ```bash
 wrangler secret put SUPABASE_URL
@@ -100,7 +148,7 @@ wrangler secret put UPSTASH_REDIS_REST_URL
 wrangler secret put UPSTASH_REDIS_REST_TOKEN
 ```
 
-## 8. Deploy
+## 9. Deploy
 
 ```bash
 npm run deploy
@@ -108,6 +156,8 @@ npm run deploy
 
 Ships the Vite build and the Worker in one operation. The cron trigger
 in `wrangler.jsonc` is registered automatically — no separate step.
+Remember to add the production URL to Supabase's Redirect URLs (step 5)
+once you know it.
 
 ## Verifying the keep-alive works
 
@@ -119,10 +169,12 @@ what tells you Supabase's inactivity clock is being reset.
 
 ## Not built yet (intentionally out of scope for v1)
 
-- Photo upload endpoint (presigned R2 PUT + a row insert into `photos`)
 - On-the-fly thumbnails via Cloudflare Image Transformations (free up to
-  5,000 unique transforms/month, pairs directly with R2)
-- Login / magic-link screen (the browser Supabase client in
-  `src/lib/supabase.ts` is ready for it)
-- The actual designed gallery UI — `App.tsx` right now only proves the
-  Worker → Supabase → Redis path works end to end
+  5,000 unique transforms/month, pairs directly with R2) — right now
+  every photo loads full-size, which is fine at low traffic but wasteful
+  once galleries get large
+- Handling uploads over Cloudflare's 100MB request body cap (R2's
+  multipart upload API is the fix if you shoot RAW files that hit it)
+- Deleting photos/galleries (only create + read are wired)
+- Real branding — "Proof" and the darkroom vocabulary are placeholders;
+  see the Design section above for what to swap

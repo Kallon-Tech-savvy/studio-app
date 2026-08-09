@@ -1,0 +1,1 @@
+{"root":["./src/adminpanel.tsx","./src/app.tsx","./src/authedimage.tsx","./src/clientgallery.tsx","./src/loginform.tsx","./src/router.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/lib/supabase.ts","./src/lib/usesession.ts"],"version":"5.9.3"}

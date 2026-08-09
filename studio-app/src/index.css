@@ -1,21 +1,455 @@
+/* ── Tokens ─────────────────────────────────────────────────────── */
+:root {
+  --paper: #e8e4da;        /* Proof Paper — background */
+  --ink: #1c1a17;          /* Ink Black — text, rules, frames */
+  --safelight: #b7311f;    /* Safelight Red — the one accent */
+  --fixer: #4b5c46;        /* Fixer Green — "published" indicator */
+  --negative: #635c4f;     /* Negative Gray — captions, metadata */
+  --lighttable: #f7f5f0;   /* Light Table White — mats, inputs */
+
+  --font-display: "Barlow Condensed", sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+}
+
 * {
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: light;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  color: #1a1a1a;
-  background: #fafafa;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image: radial-gradient(rgba(28, 26, 23, 0.06) 0.6px, transparent 0.6px);
+  background-size: 22px 22px;
 }
 
-.wiring-check {
-  max-width: 640px;
-  margin: 4rem auto;
-  padding: 0 1.5rem;
-  line-height: 1.5;
+h1, h2, h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
-.wiring-check .error {
-  color: #b91c1c;
+p {
+  margin: 0 0 var(--space-3);
+}
+
+/* ── Page shell ─────────────────────────────────────────────────── */
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page > * {
+  animation: rise-in 0.5s ease both;
+}
+.page > *:nth-child(2) { animation-delay: 0.05s; }
+.page > *:nth-child(3) { animation-delay: 0.1s; }
+.page > *:nth-child(4) { animation-delay: 0.15s; }
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.site-header {
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--ink);
+}
+
+.wordmark {
+  font-size: 2rem;
+  text-transform: uppercase;
+}
+
+.wordmark-tag {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--negative);
+  text-transform: none;
+  margin-top: var(--space-1);
+}
+
+/* ── Section headings ───────────────────────────────────────────── */
+.lightbox-section {
+  margin-bottom: var(--space-2);
+}
+
+.section-heading {
+  font-size: 1.15rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.section-sub {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--negative);
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+/* ── Sprocket strip (the signature motif) ──────────────────────── */
+.sprocket-strip {
+  height: 12px;
+  background-image: radial-gradient(circle, var(--ink) 2.2px, transparent 2.3px);
+  background-size: 18px 12px;
+  background-position: center;
+  background-repeat: repeat-x;
+  opacity: 0.5;
+  margin: var(--space-2) 0;
+}
+
+/* ── Rolls (galleries) ──────────────────────────────────────────── */
+.roll-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.roll {
+  padding: var(--space-3) 0;
+}
+
+.roll-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-1) 0;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.roll-header:hover .roll-title {
+  color: var(--safelight);
+}
+
+.roll-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--negative);
+  text-transform: uppercase;
+}
+
+.roll-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.4rem;
+  margin-left: var(--space-2);
+  transition: color 0.15s ease;
+}
+
+.roll-count {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--negative);
+  white-space: nowrap;
+}
+
+.empty-note {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--negative);
+  padding: var(--space-2) 0;
+}
+
+/* ── Frames (photos) ────────────────────────────────────────────── */
+.frame-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-1);
+}
+
+.frame {
+  background: var(--lighttable);
+  border: 1px solid var(--ink);
+  padding: var(--space-1);
+}
+
+.thumb-wrap {
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  filter: blur(6px);
+  transition: opacity 0.6s ease, filter 0.6s ease;
+}
+
+.thumb--loaded {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.thumb-loading,
+.thumb-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--negative);
+  text-align: center;
+  padding: var(--space-1);
+}
+
+.frame-number {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--negative);
+  padding: var(--space-1) var(--space-1) 0;
+}
+
+/* ── Forms ──────────────────────────────────────────────────────── */
+.field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 320px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--negative);
+}
+
+input[type="email"],
+input[type="text"],
+select {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--lighttable);
+  color: var(--ink);
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9rem;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+.file-btn:focus-within {
+  outline: 2px solid var(--safelight);
+  outline-offset: 2px;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────── */
+.btn {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  display: inline-block;
+  text-align: center;
+  width: fit-content;
+}
+
+.btn:hover {
+  background: var(--safelight);
+  border-color: var(--safelight);
+  color: var(--lighttable);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--lighttable);
+  color: var(--ink);
+}
+
+.btn-secondary:hover {
+  background: var(--safelight);
+  color: var(--lighttable);
+}
+
+.file-btn.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.btn-link {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--safelight);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ── Darkroom (admin) ───────────────────────────────────────────── */
+.darkroom {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--ink);
+}
+
+.darkroom-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.signed-in-as {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--negative);
+  margin: 0;
+}
+
+.login-card {
+  max-width: 320px;
+}
+
+.status-note {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--negative);
+  margin-top: var(--space-2);
+}
+
+.status-error {
+  color: var(--safelight);
+}
+
+.upload-block {
+  margin-top: var(--space-5);
+}
+
+.roll-status-list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.roll-status-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9rem;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1.5px solid var(--negative);
+}
+
+.status-dot--published {
+  background: var(--fixer);
+  border-color: var(--fixer);
+}
+
+.status-label {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--negative);
+}
+
+.roll-status-list .btn-link {
+  margin-left: auto;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* ── Motion & accessibility ─────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .wordmark {
+    font-size: 1.6rem;
+  }
+  .frame-grid {
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  }
 }
