@@ -7,6 +7,12 @@ import {
   countPublishedGalleries,
 } from '../domain/admin'
 
+import {
+  formatCurrency,
+  formatPercent,
+  type FinancialSummary,
+} from '../domain/finance'
+
 import { Card } from './Card'
 import { Button } from './Button'
 import { StatCard } from './StatCard'
@@ -16,19 +22,21 @@ interface DashboardViewProps {
   logs: Log[]
 
   clientCount: number
-  totalRevenue: number
-  totalOutstanding: number
+  financialSummary: FinancialSummary
+  canViewFinances?: boolean
 
   onOpenGalleries: () => void
+  onOpenClients?: () => void
 }
 
 export function DashboardView({
   galleries,
   logs,
   clientCount,
-  totalRevenue,
-  totalOutstanding,
+  financialSummary,
+  canViewFinances = true,
   onOpenGalleries,
+  onOpenClients,
 }: DashboardViewProps) {
   const publishedCount =
     countPublishedGalleries(
@@ -37,9 +45,16 @@ export function DashboardView({
 
   return (
     <div className="admin-view">
-      <h3 className="section-heading">
-        Studio At-A-Glance
-      </h3>
+      <div className="section-headline">
+        <div>
+          <h3 className="section-heading">
+            Studio At-A-Glance
+          </h3>
+          <p className="section-sub">
+            Real-time operations, delivery status, and financial health.
+          </p>
+        </div>
+      </div>
 
       {galleries.length === 0 &&
         clientCount === 0 && (
@@ -53,25 +68,72 @@ export function DashboardView({
         <StatCard
           label="Published Galleries"
           value={publishedCount}
+          subtext={`${galleries.length} total rolls`}
         />
 
         <StatCard
           label="Total Clients"
           value={clientCount}
+          subtext={
+            canViewFinances && financialSummary.totalRevenue > 0
+              ? `Avg ${formatCurrency(financialSummary.averageClientValue)} / client`
+              : undefined
+          }
         />
 
-        <StatCard
-          label="Revenue Booked"
-          value={`NLe ${totalRevenue.toLocaleString()}`}
-          tone="positive"
-        />
+        {canViewFinances ? (
+          <>
+            <StatCard
+              label="Revenue Booked"
+              value={formatCurrency(financialSummary.totalRevenue)}
+              subtext={`${formatCurrency(financialSummary.totalReceived)} received (${formatPercent(financialSummary.collectionRate)})`}
+              tone="positive"
+            />
 
-        <StatCard
-          label="Outstanding Balances"
-          value={`NLe ${totalOutstanding.toLocaleString()}`}
-          tone="danger"
-        />
+            <StatCard
+              label="Outstanding Balances"
+              value={formatCurrency(financialSummary.totalOutstanding)}
+              subtext={`${financialSummary.unpaidCount + financialSummary.partialCount} unpaid/partial accounts`}
+              tone={financialSummary.totalOutstanding > 0 ? 'danger' : 'positive'}
+            />
+          </>
+        ) : null}
       </div>
+
+      {canViewFinances && financialSummary.totalRevenue > 0 && (
+        <div className="financial-health-card">
+          <div className="financial-health-card__header">
+            <div>
+              <span className="admin-eyebrow">Financial Health</span>
+              <h4 style={{ margin: '4px 0 0', fontSize: '1rem' }}>
+                Collection Rate: <strong>{formatPercent(financialSummary.collectionRate)}</strong>
+              </h4>
+            </div>
+            {onOpenClients && (
+              <Button variant="secondary" onClick={onOpenClients}>
+                Manage Accounts →
+              </Button>
+            )}
+          </div>
+          <div className="financial-progress-bar" role="progressbar" aria-valuenow={financialSummary.collectionRate} aria-valuemin={0} aria-valuemax={100}>
+            <div
+              className="financial-progress-bar__fill"
+              style={{ width: `${financialSummary.collectionRate}%` }}
+            />
+          </div>
+          <div className="financial-health-card__legend">
+            <span>
+              Collected: <strong>{formatCurrency(financialSummary.totalReceived)}</strong>
+            </span>
+            <span>
+              Receivables: <strong>{formatCurrency(financialSummary.totalOutstanding)}</strong>
+            </span>
+            <span>
+              Fully Paid: <strong>{financialSummary.paidCount}</strong> clients
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="dashboard-grid">
         <Card>

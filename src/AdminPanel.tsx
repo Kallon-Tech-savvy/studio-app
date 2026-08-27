@@ -133,11 +133,7 @@ export function AdminPanel({
           ? selectFinancialSummary(
               data.clients,
             )
-          : {
-              totalRevenue: 0,
-              totalReceived: 0,
-              totalOutstanding: 0,
-            },
+          : selectFinancialSummary([]),
       [
         data.clients,
         canViewFinances,
@@ -210,15 +206,20 @@ export function AdminPanel({
           clientCount={
             data.clients.length
           }
-          totalRevenue={
-            financialSummary.totalRevenue
+          financialSummary={
+            financialSummary
           }
-          totalOutstanding={
-            financialSummary.totalOutstanding
+          canViewFinances={
+            canViewFinances
           }
           onOpenGalleries={() =>
             setActiveTab(
               'galleries',
+            )
+          }
+          onOpenClients={() =>
+            setActiveTab(
+              'clients',
             )
           }
         />

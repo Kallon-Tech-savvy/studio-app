@@ -31,7 +31,7 @@ export function AdminHeader({
         
         {/* Gamification Stats */}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', background: 'rgba(0,0,0,0.2)', padding: '6px 12px', borderRadius: '12px', border: '1px solid var(--line)' }}>
-          <div title="Current Streak" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#ff9900', fontWeight: 'bold' }}>
+          <div title="Current Streak" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--warning)', fontWeight: 'bold' }}>
             🔥 {staff.current_streak || 0}
           </div>
           <div title="Experience Points" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--success)', fontWeight: 'bold' }}>

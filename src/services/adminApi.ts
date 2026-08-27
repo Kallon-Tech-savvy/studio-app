@@ -45,6 +45,7 @@ export const adminApi = {
   clients: {
     list: (token: string) => request<{ clients: Client[] }>('/api/clients', { accessToken: token }),
     create: (token: string, payload: unknown) => request<{ client: Client }>('/api/clients', { accessToken: token, method: 'POST', body: JSON.stringify(payload) }),
+    update: (token: string, id: string, payload: Partial<Client>) => request<{ client: Client }>(`/api/clients/${id}`, { accessToken: token, method: 'PATCH', body: JSON.stringify(payload) }),
     delete: (token: string, id: string) => request<{ success: true }>(`/api/clients/${id}`, { accessToken: token, method: 'DELETE', headers: {} }),
   },
   galleries: {

@@ -20,27 +20,27 @@
      --warning   on --warning-bg       ≈  7.5:1  ✓ (AA)
      ----------------------------------------------------------------- */
   --paper:        #100d0a;
-  --paper-strong: #1a1611;
-  --panel:        rgba(26, 22, 17, 0.82);
+  --paper-strong: #191510;
+  --panel:        rgba(25, 21, 16, 0.92);
 
-  --ink:          #ad8946; /* bone/ivory — 15.9:1 on --paper */
-  --muted:        #a89b87; /* warm taupe — 7.1:1 on --paper */
+  --ink:          #f4ede2; /* bone/ivory — 15.4:1 (AAA) on --paper */
+  --muted:        #b3a492; /* warm stone/taupe — 7.7:1 (AAA for regular text) on --paper */
 
-  --accent:       #c9a66b; /* brass — 8.4:1 on --paper */
-  --accent-bright:#ddbb85; /* hover lift */
-  --accent-soft:  rgba(201, 166, 107, 0.16);
-  --accent-dark:  #9c7c47; /* shadow under buttons */
+  --accent:       #c9a66b; /* brass — 7.8:1 on --paper */
+  --accent-bright:#e0bc80; /* hover lift */
+  --accent-soft:  rgba(201, 166, 107, 0.18);
+  --accent-dark:  #8a6c3a; /* shadow under buttons */
 
-  --success:      #8fa888; /* muted sage — 7.5:1 on --paper */
-  --success-bg:   #131c11;
+  --success:      #9fc496; /* clear muted sage — 9.1:1 on --paper */
+  --success-bg:   #142212;
 
-  --negative:     #c97264; /* rosewood — 5.6:1 on --paper */
-  --danger-bg:    #1e0f0c;
+  --negative:     #e28475; /* clear rosewood/coral — 7.4:1 on --paper */
+  --danger-bg:    #26120e;
 
-  --warning:      #d89b4a; /* ochre — 8.0:1 on --paper */
-  --warning-bg:   #1d1508;
+  --warning:      #e2a757; /* amber ochre — 9.2:1 on --paper */
+  --warning-bg:   #241708;
 
-  --line:         rgba(239, 232, 219, 0.10); /* warm hairline on dark surfaces */
+  --line:         rgba(244, 237, 226, 0.12); /* warm hairline on dark surfaces */
   --shadow:       0 8px 32px rgba(0, 0, 0, 0.7);
 
   /* Aliases used by older components */
@@ -48,7 +48,7 @@
   --charcoal-light:var(--muted);
   --olive:         var(--success);
   --olive-light:   #b7c9ae;
-  --olive-pale:    #1a2015;
+  --olive-pale:    var(--success-bg);
   --cream-card:    var(--paper-strong);
   --cream-matted:  var(--paper);
   --accent-glow:   var(--accent-soft);
@@ -425,6 +425,7 @@ select {
 
 input[type="email"],
 input[type="text"],
+input,
 select {
   width: 100%;
   font-size: 1rem;

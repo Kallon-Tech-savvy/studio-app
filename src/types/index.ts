@@ -128,7 +128,7 @@ export type UploadQueueItem = {
 
 // ── Payment ───────────────────────────────────────────────────────
 
-export type PaymentStatus = 'PAID' | 'PARTIAL' | 'UNPAID'
+export type PaymentStatus = 'PAID' | 'PARTIAL' | 'UNPAID' | 'OVERPAID' | 'COMPLIMENTARY'
 
 // ── Gallery access ────────────────────────────────────────────────
 

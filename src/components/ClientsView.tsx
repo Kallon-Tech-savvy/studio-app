@@ -1,5 +1,6 @@
 import {
   useState,
+  useMemo,
 } from 'react'
 
 import type {
@@ -10,6 +11,12 @@ import type {
 import {
   adminApi,
 } from '../services/adminApi'
+
+import {
+  selectFinancialSummary,
+  formatCurrency,
+  formatPercent,
+} from '../domain/finance'
 
 import { useAdminNotice, describeError } from './AdminNotice'
 
@@ -64,6 +71,10 @@ export function ClientsView({
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const notify = useAdminNotice()
 
+  const financialSummary = useMemo(() => {
+    return selectFinancialSummary(clients)
+  }, [clients])
+
   function updateForm(
     updates: Partial<ClientFormState>,
   ) {
@@ -95,6 +106,53 @@ export function ClientsView({
       notify(describeError(error, "Couldn't add that client — please try again."), 'error')
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function updateClient(
+    clientId: string,
+    updates: Partial<Client>,
+  ) {
+    try {
+      await adminApi.clients.update(
+        accessToken,
+        clientId,
+        updates,
+      )
+
+      await loadClients()
+      await loadGalleries()
+      await loadLogs()
+      notify('Client details updated.', 'success')
+    } catch (error) {
+      notify(describeError(error, "Couldn't update client — please try again."), 'error')
+      throw error
+    }
+  }
+
+  async function recordPayment(
+    clientId: string,
+    paymentAmount: number,
+  ) {
+    const client = clients.find(c => c.id === clientId)
+    if (!client) return
+
+    const newAmountPaid = Number(client.amount_paid ?? 0) + Number(paymentAmount)
+
+    try {
+      await adminApi.clients.update(
+        accessToken,
+        clientId,
+        { amount_paid: newAmountPaid },
+      )
+
+      await loadClients()
+      await loadGalleries()
+      await loadLogs()
+      notify(`Payment of ${formatCurrency(paymentAmount)} recorded for ${client.name}.`, 'success')
+    } catch (error) {
+      notify(describeError(error, "Couldn't record payment — please try again."), 'error')
+      throw error
     }
   }
 
@@ -130,6 +188,46 @@ export function ClientsView({
 
   return (
     <div className="admin-view">
+      <div className="section-headline">
+        <div>
+          <h3 className="section-heading">
+            Client & Financial Accounts
+          </h3>
+          <p className="section-sub">
+            Track package pricing, retainer deposits, balance payments, and client contact info.
+          </p>
+        </div>
+      </div>
+
+      {/* Financial Summary KPI Banner */}
+      {clients.length > 0 && (
+        <div className="financial-summary-banner">
+          <div className="financial-summary-banner__metric">
+            <span className="metric-label">Booked Revenue</span>
+            <strong className="metric-value">{formatCurrency(financialSummary.totalRevenue)}</strong>
+            <span className="metric-sub">{clients.length} total clients</span>
+          </div>
+
+          <div className="financial-summary-banner__metric">
+            <span className="metric-label">Collected</span>
+            <strong className="metric-value metric-value--positive">{formatCurrency(financialSummary.totalReceived)}</strong>
+            <span className="metric-sub">{formatPercent(financialSummary.collectionRate)} collection rate</span>
+          </div>
+
+          <div className="financial-summary-banner__metric">
+            <span className="metric-label">Outstanding Receivables</span>
+            <strong className="metric-value metric-value--danger">{formatCurrency(financialSummary.totalOutstanding)}</strong>
+            <span className="metric-sub">{financialSummary.unpaidCount + financialSummary.partialCount} pending accounts</span>
+          </div>
+
+          <div className="financial-summary-banner__metric">
+            <span className="metric-label">Average Package Value</span>
+            <strong className="metric-value">{formatCurrency(financialSummary.averageClientValue)}</strong>
+            <span className="metric-sub">{financialSummary.paidCount} fully paid</span>
+          </div>
+        </div>
+      )}
+
       <div className="clients-layout">
         <ClientCreateForm
           form={form}
@@ -139,10 +237,6 @@ export function ClientsView({
         />
 
         <div>
-          <h3>
-            Client Accounts
-          </h3>
-
           <ClientDirectory
             clients={clients}
             galleriesByClientId={
@@ -151,6 +245,12 @@ export function ClientsView({
             deletingId={deletingId}
             onDelete={
               deleteClient
+            }
+            onUpdateClient={
+              updateClient
+            }
+            onRecordPayment={
+              recordPayment
             }
           />
         </div>
