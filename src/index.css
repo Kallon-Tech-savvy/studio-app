@@ -1,63 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+
 /* ── Tokens ─────────────────────────────────────────────────────── */
 :root {
-  /* ── Bone, Brass & Ink ─────────────────────────────────────────
-     A deliberate move away from the gamified Lime/Teal palette toward
-     something a couture photography studio would put its name on: a
-     warm near-black instead of a cool one, a single brass/champagne
-     accent used the way a frame shop uses gold leaf — a line, a
-     numeral, a moment of attention, never a wash — and bone-toned
-     type instead of clinical white. Every pair below is verified
-     against the background it's actually painted on, not --paper by
-     default, since several of these sit inside their own solid card.
-     -----------------------------------------------------------------
-     --ink       on --paper            ≈ 15.9:1  ✓ (AAA)
-     --muted     on --paper            ≈  7.1:1  ✓ (AA)
-     --accent    on --paper            ≈  8.4:1  ✓ (AA)
-     --negative  on --paper            ≈  5.6:1  ✓ (AA)
-     --success   on --paper            ≈  7.5:1  ✓ (AA)
-     --negative  on --danger-bg        ≈  5.4:1  ✓ (AA)
-     --success   on --success-bg       ≈  6.8:1  ✓ (AA)
-     --warning   on --warning-bg       ≈  7.5:1  ✓ (AA)
-     ----------------------------------------------------------------- */
-  --paper:        #100d0a;
-  --paper-strong: #191510;
-  --panel:        rgba(25, 21, 16, 0.92);
+  --paper: #071b2a;
+  --paper-strong: #0d2335;
+  --paper-soft: #12314a;
+  --panel: rgba(12, 27, 38, 0.9);
 
-  --ink:          #f4ede2; /* bone/ivory — 15.4:1 (AAA) on --paper */
-  --muted:        #b3a492; /* warm stone/taupe — 7.7:1 (AAA for regular text) on --paper */
+  --ink: #edf6ff;
+  --muted: #ebe8c2;
 
-  --accent:       #c9a66b; /* brass — 7.8:1 on --paper */
-  --accent-bright:#e0bc80; /* hover lift */
-  --accent-soft:  rgba(201, 166, 107, 0.18);
-  --accent-dark:  #8a6c3a; /* shadow under buttons */
+  --navy: #0a2a3d;
+  --deep-sea: #0f3d5d;
+  --blue-glow: #204d6f;
 
-  --success:      #9fc496; /* clear muted sage — 9.1:1 on --paper */
-  --success-bg:   #142212;
+  --gold: #d7b36a;
+  --gold-bright: #f0d38d;
+  --gold-soft: rgba(243, 226, 192, 0.18);
+  --gold-dark: #9d7a2d;
 
-  --negative:     #e28475; /* clear rosewood/coral — 7.4:1 on --paper */
-  --danger-bg:    #26120e;
+  --marron: #32231f;
+  --marron-soft: #4b3531;
 
-  --warning:      #e2a757; /* amber ochre — 9.2:1 on --paper */
-  --warning-bg:   #241708;
+  --success: #97d0b5;
+  --success-bg: #112f2a;
 
-  --line:         rgba(244, 237, 226, 0.12); /* warm hairline on dark surfaces */
-  --shadow:       0 8px 32px rgba(0, 0, 0, 0.7);
+  --negative: #f09a93;
+  --danger-bg: #2b1a1a;
 
-  /* Aliases used by older components */
-  --charcoal:      var(--ink);
-  --charcoal-light:var(--muted);
-  --olive:         var(--success);
-  --olive-light:   #b7c9ae;
-  --olive-pale:    var(--success-bg);
-  --cream-card:    var(--paper-strong);
-  --cream-matted:  var(--paper);
-  --accent-glow:   var(--accent-soft);
-  --safelight:     var(--accent);
-  --muted-bg:      var(--paper-strong);
+  --warning: #f1c77b;
+  --warning-bg: #2a2018;
 
-  --font-display: "Barlow Condensed", "Helvetica Neue", Arial, sans-serif;
-  --font-body:    "IBM Plex Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-mono:    "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --line: rgba(198, 217, 234, 0.16);
+  --shadow: 0 24px 60px rgba(4, 12, 18, 0.45);
+
+  --charcoal: var(--ink);
+  --charcoal-light: var(--muted);
+  --olive: var(--success);
+  --olive-light: #bae0d1;
+  --olive-pale: var(--success-bg);
+  --cream-card: var(--paper-strong);
+  --cream-matted: var(--paper);
+  --accent-glow: var(--gold-soft);
+  --safelight: var(--gold);
+  --muted-bg: var(--paper-strong);
+
+  --font-display: "Inter", "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -68,9 +58,8 @@
   --space-7: 48px;
   --space-8: 64px;
 
-  /* Safe-area for notched / rounded phones */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-top:    env(safe-area-inset-top,    0px);
+  --safe-top: env(safe-area-inset-top, 0px);
 }
 
 * {
@@ -87,11 +76,67 @@ body {
   font-size: 16px;
   line-height: 1.6;
   color: var(--ink);
-  background: var(--paper);
-  background-image: 
-    radial-gradient(circle at 15% 50%, rgba(201, 166, 107, 0.07), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(201, 166, 107, 0.035), transparent 30%);
+  background:
+    radial-gradient(circle at top left, rgba(215, 179, 106, 0.16), transparent 22%),
+    radial-gradient(circle at top right, rgba(37, 104, 147, 0.22), transparent 18%),
+    linear-gradient(180deg, #071b2a 0%, #0a1f2f 100%);
   min-height: 100vh;
+}
+
+.offline-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--warning);
+  border-radius: 10px;
+  background: rgba(42, 32, 24, 0.96);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+  animation: offline-pulse 2.4s ease-in-out infinite;
+}
+
+.offline-banner--reconnected {
+  border-color: var(--success);
+  background: rgba(17, 47, 42, 0.96);
+  animation: none;
+}
+
+.offline-banner__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+@keyframes offline-pulse {
+  0%, 100% { opacity: 0.82; }
+  50% { opacity: 1; }
+}
+
+@media (min-width: 700px) {
+  .offline-banner {
+    left: auto;
+    right: 20px;
+    max-width: 420px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offline-banner {
+    animation: none;
+  }
 }
 
 h1,
@@ -208,8 +253,8 @@ select {
 /* ── Content cards / sections ───────────────────────────────────── */
 .lightbox-section,
 .darkroom {
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(16, 35, 49, 0.94), rgba(9, 20, 28, 0.96));
+  border: 1px solid rgba(215, 179, 106, 0.14);
   border-radius: 24px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(8px);
@@ -336,24 +381,51 @@ select {
 /* ── Frames (photos) ────────────────────────────────────────────── */
 .frame-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--space-3);
-  padding-top: var(--space-4);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+  padding-top: 1rem;
 }
 
 .frame {
   position: relative;
-  background: var(--paper-strong);
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  grid-column: span 3;
+  background: linear-gradient(180deg, rgba(13, 35, 53, 0.88), rgba(10, 20, 29, 0.95));
+  border: 1px solid rgba(198, 217, 234, 0.12);
+  border-radius: 22px;
   overflow: hidden;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 18px 40px rgba(4, 10, 16, 0.22);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.frame:nth-child(5n + 1) {
+  grid-column: span 5;
+}
+
+.frame:nth-child(5n + 2) {
+  grid-column: span 3;
+}
+
+.frame:nth-child(5n + 3) {
+  grid-column: span 4;
+}
+
+.frame:nth-child(5n + 4) {
+  grid-column: span 4;
+}
+
+.frame:nth-child(5n + 5) {
+  grid-column: span 3;
+}
+
+.frame:hover {
+  transform: translateY(-3px);
+  border-color: rgba(215, 179, 106, 0.28);
 }
 
 .thumb-wrap {
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
-  background: linear-gradient(135deg, #f7ede1, #e3c3a6);
+  background: linear-gradient(135deg, #dceaf5, #b6bfd0);
   cursor: pointer;
 }
 
@@ -388,10 +460,16 @@ select {
 }
 
 .frame-number {
-  padding: var(--space-2) var(--space-3) var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.8rem 0.9rem 1rem;
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: 0.64rem;
   color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* ── Forms ──────────────────────────────────────────────────────── */
@@ -467,19 +545,20 @@ button:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
+  gap: 0.5rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  font-family: var(--font-body);
-  padding: 0.8rem 1.4rem;
-  border: 2px solid var(--accent);
-  border-radius: 12px;
-  background: var(--accent);
-  color: #000;
+  font-family: var(--font-display);
+  padding: 0.8rem 1.3rem;
+  border: 1px solid rgba(215, 179, 106, 0.45);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-bright) 100%);
+  color: #1d1b18;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--accent-dark);
-  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.1s cubic-bezier(0.4, 0, 0.2, 1), background 0.1s ease;
+  box-shadow: 0 12px 26px rgba(215, 179, 106, 0.22);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
   user-select: none;
 }
 
@@ -500,10 +579,10 @@ button:focus-visible,
 }
 
 .btn-secondary {
-  background: var(--paper-strong);
+  background: rgba(11, 23, 31, 0.68);
   color: var(--ink);
-  border: 2px solid var(--line);
-  box-shadow: 0 4px 0 var(--line);
+  border: 1px solid var(--line);
+  box-shadow: none;
 }
 
 .btn-secondary:active {
@@ -511,8 +590,8 @@ button:focus-visible,
 }
 
 .btn-secondary:hover {
-  background: var(--panel);
-  border-color: var(--muted);
+  background: rgba(18, 42, 57, 0.9);
+  border-color: rgba(215, 179, 106, 0.38);
   color: var(--ink);
 }
 
@@ -710,12 +789,11 @@ button:focus-visible,
 
 .frame-handwritten {
   display: block;
-  margin-top: 2px;
   font-family: var(--font-mono);
   font-style: italic;
-  font-size: 0.65rem;
-  color: var(--muted);
-  opacity: 0.7;
+  font-size: 0.58rem;
+  color: var(--gold);
+  opacity: 0.9;
 }
 
 /* ── Quiet in-app notice (replaces jarring browser alert() dialogs) ── */
@@ -831,10 +909,10 @@ button:focus-visible,
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  background: rgba(23, 18, 14, 0.92);
+  background: rgba(8, 19, 27, 0.92);
   backdrop-filter: blur(12px);
   color: var(--ink);
-  border: 1px solid var(--line);
+  border: 1px solid rgba(215, 179, 106, 0.2);
   border-radius: 999px;
   padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
@@ -978,7 +1056,7 @@ button:focus-visible,
 
 /* ── Client gallery page shell ─────────────────────────────────────── */
 .client-page {
-  max-width: 1100px;
+  max-width: 1180px;
 }
 
 .wordmark-wrap {
@@ -989,12 +1067,148 @@ button:focus-visible,
   flex-wrap: wrap;
 }
 
+.client-gallery-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  gap: 1.5rem;
+  align-items: end;
+  padding: clamp(1.25rem, 2vw, 2.1rem);
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(215, 179, 106, 0.14);
+  border-radius: 32px;
+  background:
+    linear-gradient(135deg, rgba(10, 42, 61, 0.96), rgba(10, 25, 35, 0.9)),
+    radial-gradient(circle at 16% 18%, rgba(215, 179, 106, 0.16), transparent 24%);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.client-gallery-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.03) 52%, transparent 100%);
+  pointer-events: none;
+}
+
+.client-gallery-hero__content,
+.client-gallery-hero__aside {
+  position: relative;
+  z-index: 1;
+}
+
+.client-gallery-hero__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.client-gallery-hero__title {
+  font-size: clamp(2.5rem, 6vw, 5.2rem);
+  line-height: 0.88;
+  letter-spacing: -0.08em;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.client-gallery-hero__subtitle {
+  max-width: 38rem;
+  margin-top: 0.8rem;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.client-gallery-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.client-gallery-hero__aside {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.client-gallery-hero__media {
+  position: relative;
+  overflow: hidden;
+  min-height: 320px;
+  border-radius: 24px;
+  border: 1px solid rgba(215, 179, 106, 0.2);
+  background: rgba(255,255,255,0.02);
+}
+
+.client-gallery-hero__media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  filter: saturate(1.05) contrast(1.02);
+}
+
+.client-gallery-hero__media-badge {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 999px;
+  background: rgba(11, 20, 28, 0.5);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.client-gallery-hero__card-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.client-gallery-hero__card {
+  border: 1px solid rgba(215, 179, 106, 0.2);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.02);
+  padding: 0.9rem 0.95rem;
+}
+
+.client-gallery-hero__card-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.client-gallery-hero__card-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
 .client-status-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 18px;
-  border-radius: 12px;
+  padding: 14px 18px;
+  border-radius: 18px;
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   font-size: 0.82rem;

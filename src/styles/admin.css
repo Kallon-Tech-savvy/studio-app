@@ -854,8 +854,103 @@
 
 .clients-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: minmax(280px, 0.78fr) minmax(0, 1.42fr);
   gap: 24px;
+  align-items: start;
+}
+
+.client-create-panel {
+  position: sticky;
+  top: 24px;
+  padding: 22px;
+  border: 1px solid rgba(215, 179, 106, 0.3);
+  border-radius: var(--admin-radius);
+  background: linear-gradient(145deg, rgba(25, 48, 65, 0.96), rgba(8, 22, 32, 0.98));
+  box-shadow: var(--admin-shadow);
+}
+
+.client-create-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.client-create-panel h3 {
+  margin-top: 6px;
+  font-size: 1.45rem;
+}
+
+.client-create-panel__signal {
+  color: var(--success);
+  font-size: 0.8rem;
+  text-shadow: 0 0 12px rgba(151, 208, 181, 0.8);
+}
+
+.client-create-panel__intro {
+  margin: 16px 0 20px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.client-create-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+}
+
+.client-create-form__identity,
+.client-create-form__notes,
+.client-create-form__footer {
+  grid-column: 1 / -1;
+}
+
+.client-create-form__hint {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.client-create-form__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.client-create-form input,
+.client-create-form textarea {
+  background: rgba(2, 12, 20, 0.42);
+}
+
+@media (max-width: 780px) {
+  .clients-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .client-create-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 480px) {
+  .client-create-form {
+    grid-template-columns: 1fr;
+  }
+
+  .client-create-form__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .client-create-form__footer .admin-button {
+    width: 100%;
+  }
 }
 
 .financial-summary-banner {
@@ -1310,6 +1405,10 @@
   border-radius: 20px;
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8);
   color: var(--ink);
+}
+
+.admin-modal-content--compact {
+  max-width: 440px;
 }
 
 .admin-modal-header {

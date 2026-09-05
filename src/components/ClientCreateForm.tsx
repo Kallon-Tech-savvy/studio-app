@@ -31,19 +31,29 @@ export function ClientCreateForm({
   onSubmit,
 }: ClientCreateFormProps) {
   return (
-    <div>
-      <h3>
-        Add a Client
-      </h3>
+    <section className="client-create-panel" aria-labelledby="client-create-title">
+      <div className="client-create-panel__header">
+        <div>
+          <span className="admin-eyebrow">New account / 01</span>
+          <h3 id="client-create-title">Add a Client</h3>
+        </div>
+        <span className="client-create-panel__signal" aria-hidden="true">●</span>
+      </div>
+
+      <p className="client-create-panel__intro">
+        Create the contact record first. Gallery access and shoot details can be connected later.
+      </p>
 
       <form
         onSubmit={onSubmit}
-        className="field-stack"
+        className="field-stack client-create-form"
       >
-        <div className="field">
-          <label>Full Name</label>
+        <div className="field client-create-form__identity">
+          <label htmlFor="new-client-name">Full Name</label>
 
           <input
+            id="new-client-name"
+            autoComplete="name"
             value={form.name}
             onChange={event =>
               onChange({
@@ -55,10 +65,12 @@ export function ClientCreateForm({
         </div>
 
         <div className="field">
-          <label>Email</label>
+          <label htmlFor="new-client-email">Email</label>
 
           <input
+            id="new-client-email"
             type="email"
+            autoComplete="email"
             value={form.email}
             onChange={event =>
               onChange({
@@ -73,9 +85,12 @@ export function ClientCreateForm({
         </div>
 
         <div className="field">
-          <label>Phone</label>
+          <label htmlFor="new-client-phone">Phone</label>
 
           <input
+            id="new-client-phone"
+            type="tel"
+            autoComplete="tel"
             value={form.phone}
             onChange={event =>
               onChange({
@@ -86,12 +101,11 @@ export function ClientCreateForm({
           />
         </div>
 
-        <div className="field">
-          <label>
-            Notes
-          </label>
+        <div className="field client-create-form__notes">
+          <label htmlFor="new-client-notes">Notes</label>
 
           <textarea
+            id="new-client-notes"
             value={form.notes}
             onChange={event =>
               onChange({
@@ -105,13 +119,13 @@ export function ClientCreateForm({
         </div>
 
         <div className="field">
-          <label>
-            Total Package Cost (NLe)
-          </label>
+          <label htmlFor="new-client-total">Total Package Cost (NLe)</label>
 
           <input
+            id="new-client-total"
             type="number"
             min="0"
+            inputMode="decimal"
             value={
               form.total_amount || ''
             }
@@ -127,13 +141,13 @@ export function ClientCreateForm({
         </div>
 
         <div className="field">
-          <label>
-            Amount Already Paid (NLe)
-          </label>
+          <label htmlFor="new-client-paid">Amount Already Paid (NLe)</label>
 
           <input
+            id="new-client-paid"
             type="number"
             min="0"
+            inputMode="decimal"
             value={
               form.amount_paid || ''
             }
@@ -148,14 +162,17 @@ export function ClientCreateForm({
           />
         </div>
 
-        <button
-          type="submit"
-          className="admin-button admin-button--primary"
-          disabled={creating}
-        >
-          {creating ? 'Adding…' : 'Add Client'}
-        </button>
+        <div className="client-create-form__footer">
+          <span className="client-create-form__hint">Required fields are marked by the browser.</span>
+          <button
+            type="submit"
+            className="admin-button admin-button--primary"
+            disabled={creating}
+          >
+            {creating ? 'Adding…' : 'Add Client'}
+          </button>
+        </div>
       </form>
-    </div>
+    </section>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 
 import {
   TrashIcon,
@@ -50,6 +50,8 @@ export function ClientDirectory({
   const [paymentAmount, setPaymentAmount] = useState<number | ''>('')
   const [isRecordingPayment, setIsRecordingPayment] = useState(false)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Client | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   // Edit Client Modal State
   const [editingClient, setEditingClient] = useState<Client | null>(null)
@@ -70,6 +72,44 @@ export function ClientDirectory({
   })
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const activeModal = payingClient || editingClient || pendingDelete
+    if (!activeModal) return
+
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const modal = modalRef.current
+    const focusable = modal?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
+    )
+    focusable?.[0]?.focus()
+
+    function handleModalKeydown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setPayingClient(null)
+        setEditingClient(null)
+        setPendingDelete(null)
+        return
+      }
+
+      if (event.key !== 'Tab' || !focusable?.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleModalKeydown)
+    return () => {
+      document.removeEventListener('keydown', handleModalKeydown)
+      previouslyFocused?.focus()
+    }
+  }, [payingClient, editingClient, pendingDelete])
 
   // Filtered and sorted clients
   const processedClients = useMemo(() => {
@@ -295,7 +335,7 @@ export function ClientDirectory({
                   <button
                     type="button"
                     className="icon-button icon-button--danger"
-                    onClick={() => onDelete(client.id)}
+                      onClick={() => setPendingDelete(client)}
                     disabled={deletingId === client.id}
                     title={`Delete ${client.name}`}
                     aria-label={`Delete ${client.name}`}
@@ -397,6 +437,7 @@ export function ClientDirectory({
       {/* ── Record Payment Modal ── */}
       {payingClient && (
         <div
+          ref={modalRef}
           className="admin-modal-overlay"
           role="dialog"
           aria-modal="true"
@@ -509,6 +550,7 @@ export function ClientDirectory({
       {/* ── Edit Client & Financials Modal ── */}
       {editingClient && (
         <div
+          ref={modalRef}
           className="admin-modal-overlay"
           role="dialog"
           aria-modal="true"
@@ -617,6 +659,49 @@ export function ClientDirectory({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {pendingDelete && (
+        <div
+          ref={modalRef}
+          className="admin-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-client-title"
+          onClick={() => setPendingDelete(null)}
+        >
+          <div className="admin-modal-content admin-modal-content--compact" onClick={e => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3 id="delete-client-title">Remove client?</h3>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={() => setPendingDelete(null)}
+                aria-label="Close"
+              >
+                <CloseIcon size={18} />
+              </button>
+            </div>
+            <p className="admin-modal-subtitle">
+              This removes <strong>{pendingDelete.name}</strong> and unlinks their shoots. This cannot be undone.
+            </p>
+            <div className="form-actions">
+              <button type="button" className="admin-button admin-button--secondary" onClick={() => setPendingDelete(null)}>
+                Keep client
+              </button>
+              <button
+                type="button"
+                className="admin-button admin-button--danger"
+                onClick={() => {
+                  onDelete(pendingDelete.id)
+                  setPendingDelete(null)
+                }}
+              >
+                Remove client
+              </button>
+            </div>
           </div>
         </div>
       )}

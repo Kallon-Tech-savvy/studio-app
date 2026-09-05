@@ -1,0 +1,962 @@
+/* ==========================================================================
+   Client Gallery — design tokens
+   A quiet, editorial dark room for viewing proofs. The photography is the
+   hero; chrome stays out of the way except where it needs to communicate
+   state (selected, locked, loading). Two restrained metallic accents —
+   platinum for action/selection, brass for attention/locked — carry all
+   the meaning so color stays legible rather than decorative.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,440;9..144,560&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --pg-bg: #0a0d12;
+  --pg-bg-elevated: #12161d;
+  --pg-surface: #171c24;
+  --pg-surface-hover: #1f252f;
+  --pg-hairline: #2b323c;
+  --pg-hairline-strong: #3a4350;
+
+  --pg-paper: #ebe7dc;
+  --pg-paper-dim: #a6a399;
+
+  --pg-platinum: #c7cbd2;
+  --pg-platinum-dim: #868c96;
+  --pg-brass: #b08d57;
+  --pg-brass-dim: #8a7050;
+
+  --pg-success: #6e9f82;
+  --pg-danger: #b85b4e;
+
+  --pg-font-display: 'Fraunces', Georgia, serif;
+  --pg-font-ui: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --pg-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --pg-radius: 3px;
+  --pg-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   Base container
+   ========================================================================== */
+
+.pg-gallery {
+  --pg-gutter: clamp(16px, 4vw, 40px);
+  background: var(--pg-bg);
+  color: var(--pg-paper);
+  font-family: var(--pg-font-ui);
+  padding: 0 var(--pg-gutter) 120px;
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.pg-gallery *,
+.pg-gallery *::before,
+.pg-gallery *::after {
+  box-sizing: border-box;
+}
+
+/* Sprocket strip — echoes the film-roll motif used across the studio site. */
+.pg-sprockets {
+  height: 14px;
+  margin: 0 calc(var(--pg-gutter) * -1) 28px;
+  background-image: radial-gradient(circle, var(--pg-hairline-strong) 2.5px, transparent 2.6px);
+  background-size: 22px 14px;
+  background-position: 11px center;
+  opacity: 0.6;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+.pg-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--pg-hairline);
+  padding-bottom: 24px;
+}
+
+.pg-header-text {
+  max-width: 62ch;
+}
+
+.pg-eyebrow {
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--pg-brass);
+  margin: 0 0 10px;
+  font-weight: 500;
+}
+
+.pg-title {
+  font-family: var(--pg-font-display);
+  font-weight: 560;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.1;
+  margin: 0 0 10px;
+  color: var(--pg-paper);
+}
+
+.pg-welcome {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--pg-paper-dim);
+  margin: 0 0 10px;
+  max-width: 56ch;
+}
+
+.pg-meta {
+  font-family: var(--pg-font-mono);
+  font-size: 12.5px;
+  color: var(--pg-platinum-dim);
+  margin: 0;
+}
+
+/* ==========================================================================
+   Lock banner — a full explanation, never a silently disabled control
+   ========================================================================== */
+
+.pg-lock-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--pg-bg-elevated);
+  border: 1px solid var(--pg-brass-dim);
+  border-radius: var(--pg-radius);
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  color: var(--pg-paper);
+}
+
+.pg-lock-banner svg {
+  color: var(--pg-brass);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.pg-lock-banner p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--pg-paper-dim);
+}
+
+/* ==========================================================================
+   Album filter chips
+   ========================================================================== */
+
+.pg-album-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.pg-chip {
+  font-family: var(--pg-font-ui);
+  font-size: 13.5px;
+  color: var(--pg-paper-dim);
+  background: transparent;
+  border: 1px solid var(--pg-hairline);
+  border-radius: 999px;
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s var(--pg-ease), color 0.15s var(--pg-ease), background 0.15s var(--pg-ease);
+}
+
+.pg-chip:hover {
+  border-color: var(--pg-hairline-strong);
+  color: var(--pg-paper);
+}
+
+.pg-chip--active {
+  background: var(--pg-surface);
+  border-color: var(--pg-platinum-dim);
+  color: var(--pg-paper);
+}
+
+/* ==========================================================================
+   Contact-sheet grid — alternating spans avoid a uniform, dense wall
+   ========================================================================== */
+
+.pg-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-auto-rows: 190px;
+  grid-auto-flow: dense;
+  gap: 10px;
+}
+
+.pg-tile--wide {
+  grid-column: span 2;
+}
+
+.pg-tile--tall {
+  grid-row: span 2;
+}
+
+.pg-tile {
+  position: relative;
+  list-style: none;
+}
+
+.pg-tile-frame {
+  appearance: none;
+  border: 1px solid var(--pg-hairline);
+  border-radius: var(--pg-radius);
+  background: var(--pg-surface);
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+  overflow: hidden;
+  position: relative;
+  display: block;
+}
+
+.pg-tile-frame:hover {
+  border-color: var(--pg-hairline-strong);
+}
+
+.pg-tile-frame img,
+.pg-tile-frame .thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pg-tile-number {
+  position: absolute;
+  left: 8px;
+  bottom: 7px;
+  font-family: var(--pg-font-mono);
+  font-size: 11px;
+  color: var(--pg-paper);
+  background: rgba(10, 13, 18, 0.55);
+  padding: 2px 6px;
+  border-radius: 2px;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+}
+
+.pg-tile-lock {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  color: var(--pg-brass);
+  background: rgba(10, 13, 18, 0.65);
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Selection checkbox: reveals on hover for pointer users, but stays
+   permanently visible on touch devices — see the (hover: none) fallback
+   below — so a tap target never depends on a hover state that can't exist. */
+.pg-tile-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(235, 231, 220, 0.55);
+  background: rgba(10, 13, 18, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s var(--pg-ease), transform 0.12s var(--pg-ease), background 0.12s var(--pg-ease), border-color 0.12s var(--pg-ease);
+}
+
+.pg-tile-frame:hover ~ .pg-tile-check,
+.pg-tile:hover .pg-tile-check,
+.pg-tile-check:focus-within {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pg-tile-check input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.pg-tile-check-mark {
+  color: transparent;
+  display: flex;
+}
+
+.pg-tile-check--checked {
+  opacity: 1;
+  transform: translateY(0);
+  background: var(--pg-platinum);
+  border-color: var(--pg-platinum);
+}
+
+.pg-tile-check--checked .pg-tile-check-mark {
+  color: var(--pg-bg);
+}
+
+/* Touchscreen fallback: no hover state exists, so selection controls and
+   lock badges must be visible by default rather than hidden behind :hover. */
+@media (hover: none) {
+  .pg-tile-check {
+    opacity: 1;
+    transform: none;
+    background: rgba(10, 13, 18, 0.72);
+  }
+}
+
+.pg-empty-note {
+  color: var(--pg-paper-dim);
+  font-size: 14px;
+  padding: 40px 0;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Buttons (shared by header, chips, selection bar, lightbox)
+   ========================================================================== */
+
+.pg-btn {
+  font-family: var(--pg-font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: var(--pg-radius);
+  padding: 9px 18px;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s var(--pg-ease), border-color 0.15s var(--pg-ease), opacity 0.15s var(--pg-ease);
+}
+
+.pg-btn--ghost {
+  background: transparent;
+  border-color: var(--pg-hairline-strong);
+  color: var(--pg-paper);
+}
+
+.pg-btn--ghost:hover {
+  background: var(--pg-surface);
+}
+
+.pg-btn--primary {
+  background: var(--pg-platinum);
+  color: var(--pg-bg);
+  border-color: var(--pg-platinum);
+}
+
+.pg-btn--primary:hover {
+  background: #d9dce1;
+}
+
+.pg-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Floating selection bar — persistent batch-action toolbar
+   ========================================================================== */
+
+.pg-selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 12px);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: var(--pg-bg-elevated);
+  border: 1px solid var(--pg-hairline-strong);
+  border-radius: 10px;
+  padding: 12px 14px 12px 20px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s var(--pg-ease), transform 0.18s var(--pg-ease);
+  z-index: 40;
+  max-width: calc(100vw - 32px);
+}
+
+.pg-selection-bar--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.pg-selection-bar-count {
+  font-size: 13.5px;
+  color: var(--pg-paper-dim);
+  white-space: nowrap;
+}
+
+.pg-selection-bar-count-number {
+  font-family: var(--pg-font-mono);
+  color: var(--pg-paper);
+  font-size: 14px;
+}
+
+.pg-selection-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .pg-selection-bar {
+    left: 16px;
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    transform: translateY(12px);
+    width: auto;
+    justify-content: space-between;
+  }
+  .pg-selection-bar--visible {
+    transform: translateY(0);
+  }
+}
+
+/* ==========================================================================
+   Toasts — non-blocking status/warning surface, replaces alert()/confirm()
+   ========================================================================== */
+
+.pg-toast-viewport {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 40px));
+  font-family: var(--pg-font-ui);
+}
+
+.pg-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--pg-bg-elevated);
+  border: 1px solid var(--pg-hairline-strong);
+  border-left: 3px solid var(--pg-platinum-dim);
+  border-radius: 6px;
+  padding: 12px 12px 12px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: var(--pg-paper);
+  animation: pg-toast-in 0.18s var(--pg-ease);
+}
+
+.pg-toast--success {
+  border-left-color: var(--pg-success);
+}
+
+.pg-toast--error {
+  border-left-color: var(--pg-danger);
+}
+
+.pg-toast svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--pg-platinum-dim);
+}
+
+.pg-toast--success svg {
+  color: var(--pg-success);
+}
+
+.pg-toast--error svg {
+  color: var(--pg-danger);
+}
+
+.pg-toast-message {
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin: 0;
+  flex: 1;
+}
+
+.pg-toast-action {
+  background: none;
+  border: none;
+  color: var(--pg-platinum);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.pg-toast-close {
+  background: none;
+  border: none;
+  color: var(--pg-paper-dim);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.pg-toast-close:hover {
+  color: var(--pg-paper);
+}
+
+@keyframes pg-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .pg-toast-viewport {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+}
+
+/* ==========================================================================
+   Lightbox — keyboard-navigable modal
+   ========================================================================== */
+
+.pg-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 11, 0.86);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+  animation: pg-fade-in 0.15s var(--pg-ease);
+}
+
+.pg-lightbox-dialog {
+  background: var(--pg-bg-elevated);
+  border: 1px solid var(--pg-hairline-strong);
+  border-radius: 8px;
+  width: min(1000px, 100%);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: pg-scale-in 0.18s var(--pg-ease);
+}
+
+.pg-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--pg-hairline);
+}
+
+.pg-lightbox-frame-number {
+  font-family: var(--pg-font-mono);
+  font-size: 12px;
+  color: var(--pg-paper-dim);
+  letter-spacing: 0.03em;
+}
+
+.pg-lightbox-close {
+  background: none;
+  border: none;
+  color: var(--pg-paper-dim);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  border-radius: 4px;
+}
+
+.pg-lightbox-close:hover {
+  color: var(--pg-paper);
+  background: var(--pg-surface);
+}
+
+.pg-lightbox-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.pg-lightbox-image-frame {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  height: min(64vh, 640px);
+}
+
+.pg-lightbox-image-frame img,
+.pg-lightbox-image-frame .thumb {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+}
+
+.pg-lightbox-locked-note {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: rgba(10, 13, 18, 0.85);
+  border: 1px solid var(--pg-brass-dim);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.pg-lightbox-locked-note svg {
+  color: var(--pg-brass);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.pg-lightbox-locked-note p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pg-paper-dim);
+  line-height: 1.5;
+}
+
+.pg-lightbox-nav {
+  background: var(--pg-surface);
+  border: 1px solid var(--pg-hairline);
+  color: var(--pg-paper);
+  border-radius: 999px;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s var(--pg-ease), opacity 0.15s var(--pg-ease);
+}
+
+.pg-lightbox-nav:hover:not(:disabled) {
+  background: var(--pg-surface-hover);
+}
+
+.pg-lightbox-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pg-lightbox-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--pg-hairline);
+  flex-wrap: wrap;
+}
+
+.pg-lightbox-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--pg-paper);
+  cursor: pointer;
+}
+
+.pg-lightbox-select input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.pg-lightbox-select-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1.5px solid var(--pg-hairline-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: background 0.12s var(--pg-ease), border-color 0.12s var(--pg-ease), color 0.12s var(--pg-ease);
+}
+
+.pg-lightbox-select--checked .pg-lightbox-select-mark {
+  background: var(--pg-platinum);
+  border-color: var(--pg-platinum);
+  color: var(--pg-bg);
+}
+
+.pg-lightbox-select input:focus-visible ~ .pg-lightbox-select-mark {
+  outline: 2px solid var(--pg-brass);
+  outline-offset: 2px;
+}
+
+.pg-lightbox-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pg-paper-dim);
+}
+
+@media (max-width: 640px) {
+  .pg-lightbox-hint {
+    display: none;
+  }
+  .pg-lightbox-body {
+    flex-direction: column;
+  }
+  .pg-lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }
+  .pg-lightbox-nav--prev {
+    left: 16px;
+  }
+  .pg-lightbox-nav--next {
+    right: 16px;
+  }
+  .pg-lightbox-image-frame {
+    width: 100%;
+  }
+}
+
+@keyframes pg-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pg-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ==========================================================================
+   Loading / skeleton states — progressive media loading
+   ========================================================================== */
+
+.pg-gallery--loading {
+  padding-top: 40px;
+}
+
+.pg-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-auto-rows: 190px;
+  grid-auto-flow: dense;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.pg-skeleton-tile {
+  background: linear-gradient(100deg, var(--pg-surface) 30%, var(--pg-surface-hover) 50%, var(--pg-surface) 70%);
+  background-size: 200% 100%;
+  border-radius: var(--pg-radius);
+  animation: pg-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes pg-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* AuthedImage's own loading / error / reveal states, styled to match. */
+.pg-gallery .thumb-loading {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pg-paper-dim);
+  background: var(--pg-surface);
+  font-size: 18px;
+  letter-spacing: 0.1em;
+}
+
+.pg-gallery .thumb-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pg-paper-dim);
+  background: var(--pg-surface);
+  font-size: 12.5px;
+  text-align: center;
+  padding: 8px;
+}
+
+.pg-gallery .thumb {
+  opacity: 0;
+  filter: blur(8px);
+  transition: opacity 0.35s var(--pg-ease), filter 0.35s var(--pg-ease);
+}
+
+.pg-gallery .thumb--loaded {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.pg-status-note {
+  color: var(--pg-paper-dim);
+  font-size: 14px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.pg-status-note--error {
+  color: var(--pg-danger);
+}
+
+/* ==========================================================================
+   Focus visibility — every interactive element gets a real, visible ring
+   ========================================================================== */
+
+.pg-gallery button:focus-visible,
+.pg-gallery a:focus-visible,
+.pg-lightbox-dialog button:focus-visible,
+.pg-toast-viewport button:focus-visible,
+.pg-selection-bar button:focus-visible {
+  outline: 2px solid var(--pg-brass);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.pg-tile-check:focus-within {
+  outline: 2px solid var(--pg-brass);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Reduced motion — disable non-essential animation, keep state changes instant
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-gallery *,
+  .pg-lightbox-overlay,
+  .pg-lightbox-dialog,
+  .pg-toast,
+  .pg-skeleton-tile {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .pg-gallery .thumb {
+    filter: none;
+  }
+
+  .pg-selection-bar {
+    transition: opacity 0.001ms !important;
+    transform: translate(-50%, 0) !important;
+  }
+
+
+@media (max-width: 640px) {
+  .pg-gallery {
+    --pg-gutter: 14px;
+    padding-bottom: calc(140px + env(safe-area-inset-bottom));
+  }
+
+  .pg-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .pg-header .pg-btn {
+    width: 100%;
+  }
+
+  .pg-grid,
+  .pg-skeleton-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(150px, 42vw);
+  }
+}
+
+@media (max-width: 360px) {
+  .pg-gallery {
+    --pg-gutter: 10px;
+  }
+
+  .pg-grid,
+  .pg-skeleton-grid {
+    gap: 6px;
+    grid-auto-rows: 145px;
+  }
+
+  .pg-selection-bar {
+    left: 10px;
+    right: 10px;
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .pg-selection-bar-actions {
+    gap: 4px;
+  }
+
+  .pg-selection-bar .pg-btn {
+    padding-inline: 10px;
+  }
+}
+  .pg-selection-bar--visible {
+    transform: translate(-50%, 0) !important;
+  }
+}
+
+.pg-gallery--reduced-motion .pg-skeleton-tile {
+  animation: none;
+  background: var(--pg-surface);
+}

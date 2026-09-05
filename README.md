@@ -1,117 +1,155 @@
-# Studio App
+# Proof Studio App
 
-Production-oriented photo delivery app for a small photography studio.
+A mobile-first photo studio workspace and token-gated client gallery. Staff manage clients, galleries, albums, uploads, permissions, and delivery. Clients open private galleries without creating an account.
+
+## Stack
+
+- React 18 + TypeScript + Vite
+- Cloudflare Worker + Hono
+- Supabase Auth, Postgres, and RLS
+- Cloudflare R2 for photo storage
+- Optional Upstash Redis integration
+- JSZip for client-side batch downloads
+- Web App Manifest + Service Worker for installability and offline resilience
 
 ## Architecture
 
-- React + Vite frontend
-- Cloudflare Worker + Hono API
-- Supabase Auth + Postgres + RLS
-- Cloudflare R2 for photo masters
-- Optional Upstash Redis cache for the public gallery index
-- Resend for gallery delivery email
-- Token-gated client galleries; no client account is required
-
-### Data ownership
-
-The system follows a strict boundary:
-
-`UI -> hooks -> domain/services -> Worker API -> Supabase/R2`
+```text
+Browser UI -> hooks/domain/services -> Worker API -> Supabase / R2
+```
 
 - `src/types` contains shared domain types.
-- `src/domain` contains pure business rules and indexes.
-- `src/hooks` owns server-state orchestration and upload state.
-- `src/services/adminApi.ts` is the single browser API client.
-- `worker/index.ts` is the only write path for protected studio operations.
-- `supabase/schema.sql` is the authorization boundary; UI permissions are never trusted.
+- `src/domain` contains pure business rules.
+- `src/hooks` owns server-state and upload orchestration.
+- `src/services/adminApi.ts` is the protected browser API client.
+- `worker/index.ts` is the backend boundary for protected mutations and token-gated gallery reads.
+- `supabase/schema.sql` defines database functions, RLS, and authorization rules.
 
-## Important production rules
+## Local setup
 
-1. Never commit `.env`, `.dev.vars`, `.wrangler`, or generated build state.
-2. Never put a Supabase service-role key in the browser or Worker environment used for caller-scoped requests.
-3. Client gallery access is controlled server-side by the private gallery token.
-4. Download authorization is enforced server-side using gallery status, payment balance, and `downloads_enabled`.
-5. Album/photo mutations validate that the target record belongs to the requested gallery.
-6. Public gallery discovery only exposes galleries explicitly marked public and already in `READY`/`PUBLISHED` state.
-7. The public gallery list may expose an access token only for galleries deliberately marked public.
-8. Photo masters stay in R2; Postgres stores metadata and the R2 key.
-9. Uploads are processed sequentially in the UI to avoid saturating the browser/Worker with many large multipart requests.
-
-## Setup
+Requirements: Node.js 18+ and a Supabase project. Wrangler is installed with the project dependencies.
 
 ```bash
 npm install
-cp .env.example .env
-cp .dev.vars.example .dev.vars
+copy .env.example .env
+New-Item .dev.vars
 ```
 
-Fill in your real Supabase project URL and anon key from **Settings → API** in the Supabase dashboard.
-This app runs on two separate layers — the browser (built by Vite) and the Cloudflare Worker — and each
-needs its own copy of the same two values, under different variable names:
+PowerShell uses `copy`; Git Bash/macOS/Linux can use `cp` instead.
 
-| File          | Variables                                      | Read by            |
-| -------------- | ----------------------------------------------- | ------------------ |
-| `.env`         | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`   | Vite (the browser)  |
-| `.dev.vars`    | `SUPABASE_URL`, `SUPABASE_ANON_KEY`             | The Worker (backend) |
+Set the browser variables in `.env`:
 
-It's easy to fill in one and forget the other — if you see `Uncaught Error: supabaseKey is required.` in the
-browser console, that means `.env` is missing or incomplete (that error comes from client-side code, not the
-Worker). Note that Vite only reads `.env` when the dev server starts, so restart `npm run dev` after creating
-or editing it.
-
-Create the R2 bucket configured in `wrangler.jsonc`:
-
-```bash
-wrangler r2 bucket create studio-photos
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Apply `supabase/schema.sql` to the Supabase SQL editor.
+Set the Worker variables in `.dev.vars`:
 
-Set Worker secrets for deployment:
-
-```bash
-wrangler secret put SUPABASE_URL
-wrangler secret put SUPABASE_ANON_KEY
-wrangler secret put UPSTASH_REDIS_REST_URL
-wrangler secret put UPSTASH_REDIS_REST_TOKEN
-wrangler secret put RESEND_API_KEY
-wrangler secret put RESEND_FROM_EMAIL
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
 ```
 
-Deploy:
+Apply `supabase/schema.sql` in the Supabase SQL editor. Create the configured R2 bucket before local Worker development:
 
 ```bash
+npx wrangler r2 bucket create studio-photos
+```
+
+Start the app:
+
+```bash
+npm run dev
+```
+
+The browser app and Worker API are served through the Cloudflare Vite plugin. Restart the dev server after changing `.env`; Vite reads those values at startup.
+
+## PWA and offline behavior
+
+- `public/manifest.json` enables standalone installation and includes the app icon.
+- `public/sw.js` is registered only in production builds.
+- Static GET requests use stale-while-revalidate caching.
+- API GET requests use network-first caching with a JSON `503` fallback when no cached response exists.
+- Navigation falls back to the cached app shell when the network is unavailable.
+- Public gallery metadata and selected proof IDs hydrate from `localStorage` while the network refreshes in the background.
+- The offline banner is non-blocking and respects `prefers-reduced-motion`.
+- POST, PATCH, and DELETE requests are never cached or replayed automatically. Mutations require a connection and report status through in-app toasts.
+
+The first visit must complete online before offline gallery data can be shown. Private gallery photo bytes are fetched through token-gated Worker routes and are not treated as durable offline storage.
+
+## API surface
+
+Public gallery reads:
+
+- `GET /api/g/:token`
+- `GET /api/g/:token/albums`
+- `GET /api/g/:token/photos`
+- `GET /api/g/:token/photos/:photoId`
+- `GET /api/g/:token/photos/:photoId?download=true`
+
+The client batch download button fetches selected originals through the per-photo download route and creates a ZIP in the browser. There is intentionally no `/api/g/:token/download` endpoint.
+
+Protected studio operations are under `/api/studio/*` and `/api/galleries/*`; the Worker validates the Supabase bearer token and database ownership rules.
+
+## Scripts
+
+```bash
+npm run dev       # Start local Vite/Worker development
+npm run build     # Type-check and create client + Worker production bundles
+npm run preview   # Preview the Vite production output
+npm run deploy    # Build and deploy with Wrangler
+npm run cf-typegen # Regenerate Cloudflare Worker types
+```
+
+## Deployment
+
+Set production Worker secrets before deploying:
+
+```bash
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_ANON_KEY
+npx wrangler secret put UPSTASH_REDIS_REST_URL
+npx wrangler secret put UPSTASH_REDIS_REST_TOKEN
+npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put RESEND_FROM_EMAIL
 npm run deploy
 ```
 
-## Bootstrap owner
+Do not commit `.env`, `.dev.vars`, secrets, Wrangler state, or generated `dist` output.
 
-The database migration contains the bootstrap owner email in the staff-profile trigger/RPC. Change that value before running the schema in a new production Supabase project.
+## Security rules
 
-After the owner signs in, additional staff accounts can be created and promoted through the staff table/API.
+- Never expose a Supabase service-role key in browser code.
+- Client access is controlled by the private gallery token and server-side status checks.
+- Original downloads require an enabled gallery in `READY` or `PUBLISHED` state with no outstanding balance.
+- Album and photo mutations verify that records belong to the requested gallery.
+- Photo masters remain in R2; Postgres stores metadata and object keys.
+- UI permission checks improve usability but are not an authorization boundary.
 
-## Verification
-
-Run these checks before deployment:
+## Verification checklist
 
 ```bash
 npm install
 npm run build
 ```
 
-Then verify:
+Before release, verify:
 
-- unauthenticated users can open public galleries
-- private gallery tokens reject invalid/expired/revoked links
-- unpaid clients can preview but cannot download masters
-- paid `READY`/`PUBLISHED` galleries can download
-- staff without upload permission cannot upload/delete/reassign photos
-- staff without finance permission cannot access clients/financial data
-- album IDs from another gallery are rejected
-- deleting a photo removes its database row and attempts R2 cleanup
-- regenerating a gallery link invalidates the old token
-- no secrets are present in the repository or deployment bundle
+- The app installs from a production origin and the manifest icon loads.
+- A first online visit caches the app shell and later navigations work offline.
+- Cached public gallery data hydrates without blocking the page.
+- Offline and reconnect banners are visible without modal dialogs.
+- Layout remains usable at 360px and fixed controls clear the device safe area.
+- Interactive controls are at least 44px on touch layouts.
+- Invalid, expired, revoked, draft, and unpaid gallery links receive the expected server response.
+- Paid `READY`/`PUBLISHED` galleries can download originals.
+- Staff permissions are enforced by the Worker and Supabase, not only by hidden buttons.
 
-## Current scalability boundary
+## Scaling boundary
 
-The current design is appropriate for a small-to-medium studio. The next scaling step for very large shoots is direct browser-to-R2 multipart upload with short-lived upload authorization, plus generated thumbnail/preview objects. That removes large image bytes from the Worker request path and avoids decoding full-resolution masters in the browser just to create thumbnails.
+This architecture fits a small-to-medium studio. For very large shoots, move uploads to browser-to-R2 multipart transfers with short-lived authorization and generate preview objects asynchronously. That keeps large image bytes out of the Worker request path and reduces mobile memory pressure.

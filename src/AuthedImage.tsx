@@ -100,5 +100,14 @@ export function AuthedImage({
   if (failed) return <div className="thumb-error">Photo unavailable</div>
   if (!src) return <div className="thumb-loading" aria-label="Developing…">···</div>
 
-  return <img src={src} alt={alt} className={`thumb${revealed ? ' thumb--loaded' : ''}`} />
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={`thumb${revealed ? ' thumb--loaded' : ''}`}
+      loading="lazy"
+      decoding="async"
+      onLoad={() => setRevealed(true)}
+    />
+  )
 }

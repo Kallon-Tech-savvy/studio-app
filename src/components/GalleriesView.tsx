@@ -149,14 +149,6 @@ export function GalleriesView({
   async function deleteGallery(
     galleryId: string,
   ) {
-    if (
-      !window.confirm(
-        'Are you sure you want to permanently delete this gallery and all of its storage photos?',
-      )
-    ) {
-      return
-    }
-
     setDeletingId(galleryId)
 
     try {

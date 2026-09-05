@@ -149,14 +149,6 @@ export function GalleryControlPanel({
   async function deleteAlbum(
     albumId: string,
   ) {
-    if (
-      !window.confirm(
-        'Permanently delete this album grouping? Photos will remain but lose album tagging.',
-      )
-    ) {
-      return
-    }
-
     try {
       await adminApi.galleries.albums.delete(
         accessToken,
@@ -180,14 +172,6 @@ export function GalleryControlPanel({
   async function deletePhoto(
     photoId: string,
   ) {
-    if (
-      !window.confirm(
-        'Permanently delete this photographic master and all optimized previews?',
-      )
-    ) {
-      return
-    }
-
     try {
       await adminApi.galleries.photos.delete(
         accessToken,
@@ -287,6 +271,11 @@ export function GalleryControlPanel({
   }
 
   async function sendGalleryEmail() {
+    if (!currentClient?.email) {
+      notify('Add a client email before sending the gallery link.', 'error')
+      return
+    }
+
     setLinkAction('email')
 
     try {
@@ -304,15 +293,39 @@ export function GalleryControlPanel({
     }
   }
 
-  async function regenerateLink() {
-    if (
-      !window.confirm(
-        'Regenerate private link? All previous shared URLs will become invalid.',
-      )
-    ) {
+  function shareClientLinkViaWhatsApp() {
+    const recipientName = currentClient?.name || 'there'
+    const shareUrl = `${window.location.origin}/g/${encodeURIComponent(gallery.access_token)}`
+    const message = `Hi ${recipientName}, your gallery is ready: ${shareUrl}`
+
+    if (!currentClient?.phone) {
+      notify('Add a client phone number to share the gallery via WhatsApp.', 'error')
       return
     }
 
+    const digits = currentClient.phone.replace(/\D/g, '')
+    if (!digits) {
+      notify('This phone number is incomplete, so WhatsApp sharing was skipped.', 'error')
+      return
+    }
+
+    const whatsappUrl = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer')
+    notify('WhatsApp share opened in a new tab.', 'success')
+  }
+
+  async function copyClientLink() {
+    const shareUrl = `${window.location.origin}/g/${encodeURIComponent(gallery.access_token)}`
+
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      notify('Private gallery link copied to the clipboard.', 'success')
+    } catch {
+      notify("Couldn't copy the link — use the copy action manually from the browser.", 'error')
+    }
+  }
+
+  async function regenerateLink() {
     setLinkAction('regenerate')
 
     try {
@@ -332,14 +345,6 @@ export function GalleryControlPanel({
   }
 
   async function revokeLink() {
-    if (
-      !window.confirm(
-        'Revoke access? The link will immediately stop working for the client.',
-      )
-    ) {
-      return
-    }
-
     setLinkAction('revoke')
 
     try {
@@ -382,11 +387,30 @@ export function GalleryControlPanel({
             <button
               type="button"
               className="admin-button admin-button--secondary"
+              onClick={copyClientLink}
+              title="Copy the client gallery URL"
+            >
+              Copy Link
+            </button>
+
+            <button
+              type="button"
+              className="admin-button admin-button--secondary"
+              onClick={shareClientLinkViaWhatsApp}
+              disabled={!currentClient?.phone}
+              title={currentClient?.phone ? `Share the gallery on WhatsApp to ${currentClient.phone}` : 'Add a client phone number first'}
+            >
+              WhatsApp
+            </button>
+
+            <button
+              type="button"
+              className="admin-button admin-button--secondary"
               onClick={sendGalleryEmail}
               disabled={linkAction !== null || !currentClient?.email}
               title={currentClient?.email ? `Email the gallery link to ${currentClient.email}` : 'Assign a client with an email address first'}
             >
-              {linkAction === 'email' ? 'Sending…' : 'Email Client the Link'}
+              {linkAction === 'email' ? 'Sending…' : 'Email Client'}
             </button>
 
             <button

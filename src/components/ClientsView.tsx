@@ -159,14 +159,6 @@ export function ClientsView({
   async function deleteClient(
     clientId: string,
   ) {
-    if (
-      !window.confirm(
-        'Are you sure you want to permanently delete this client and unlink their shoots?',
-      )
-    ) {
-      return
-    }
-
     setDeletingId(clientId)
 
     try {
