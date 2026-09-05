@@ -1,0 +1,26 @@
+  - name: Health check (ping)
+    id: ping
+    continue-on-error: true
+    run: |
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.KEEP_ALIVE_URL }}")
+      echo "status=$STATUS" >> $GITHUB_OUTPUT
+      if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+        echo "Ping OK (status $STATUS)"
+        exit 0
+      else
+        echo "Ping failed (status $STATUS)"
+        exit 1
+      fi
+
+  - name: Trigger Vercel Deploy Hook
+    if: steps.ping.outcome == 'failure'
+    run: |
+      echo "Triggering Vercel deploy hook..."
+      RESP=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}")
+      echo "deploy_hook_status=$RESP"
+      if [ "$RESP" -ge 200 ] && [ "$RESP" -lt 400 ]; then
+        echo "Vercel deploy hook triggered (status $RESP)"
+      else
+        echo "Vercel deploy hook failed (status $RESP)"
+        exit 1
+      fi
