@@ -55,6 +55,20 @@ async function requirePermission(c: AppContext, permission: string): Promise<Sta
   return auth
 }
 
+// Some writes (editing the studio_staff roster) are owner-only at the
+// RLS layer, not just permission-flag-gated — see "owners can manage
+// all staff" in schema.sql. Checking that explicitly here means a
+// non-owner gets a clear, deliberate 403 instead of a generic DB error
+// surfacing from a write that RLS was always going to reject anyway.
+async function requireOwner(c: AppContext): Promise<StaffAuth> {
+  const auth = await requireStaff(c)
+  if (!auth.ok) return auth
+  if (auth.staff.role !== 'owner') {
+    return { ok: false, response: c.json({ error: 'Only the studio owner can do this.' }, 403) }
+  }
+  return auth
+}
+
 async function requireAnyPermission(c: AppContext, permissions: string[]): Promise<StaffAuth> {
   const auth = await requireStaff(c)
   if (!auth.ok) return auth
@@ -70,26 +84,19 @@ async function logActivity(supabase: ReturnType<typeof getSupabaseClient>, actio
   if (error) console.error('[activity_log] Failed to write entry:', error.message)
 }
 
+// Atomic: runs as a single `experience_points = experience_points + amount`
+// UPDATE inside award_staff_xp() (see schema.sql section 10), so concurrent
+// uploads for the same staffId can no longer race and lose an increment.
+// The RPC is SECURITY DEFINER specifically so this succeeds for non-owner
+// staff too — the only RLS write policy on studio_staff is owner-only.
 async function awardXP(supabase: ReturnType<typeof getSupabaseClient>, staffId: string, amount: number) {
-  try {
-    // In a real app we might do an RPC to increment safely, but this gets the job done for the prototype.
-    const { data: staff, error: fetchErr } = await supabase
-      .from('studio_staff')
-      .select('experience_points')
-      .eq('id', staffId)
-      .single()
-    
-    if (fetchErr || !staff) return
+  const { error } = await supabase.rpc('award_staff_xp', { p_staff_id: staffId, p_amount: amount })
+  if (error) console.error('[gamification] Failed to award XP:', error.message)
+}
 
-    const { error: updateErr } = await supabase
-      .from('studio_staff')
-      .update({ experience_points: staff.experience_points + amount })
-      .eq('id', staffId)
-
-    if (updateErr) console.error('[gamification] Failed to award XP:', updateErr.message)
-  } catch (e) {
-    console.error('[gamification] Error awarding XP:', e)
-  }
+async function incrementGalleriesPublished(supabase: ReturnType<typeof getSupabaseClient>, staffId: string) {
+  const { error } = await supabase.rpc('increment_galleries_published', { p_staff_id: staffId })
+  if (error) console.error('[gamification] Failed to increment galleries_published:', error.message)
 }
 
 function escapeHtml(value: unknown): string {
@@ -261,12 +268,7 @@ app.patch('/api/galleries/:id', async (c) => {
 
   if (body.status === 'PUBLISHED') {
     await awardXP(auth.supabase, auth.staff.id, 50) // 50 XP for publishing
-    
-    // Increment galleries_published
-    await auth.supabase
-      .from('studio_staff')
-      .update({ galleries_published: (auth.staff.galleries_published || 0) + 1 })
-      .eq('id', auth.staff.id)
+    await incrementGalleriesPublished(auth.supabase, auth.staff.id)
   }
 
   await logActivity(auth.supabase, 'UPDATE_GALLERY', `Updated gallery settings for "${data.title}" (${galleryId})`)
@@ -333,6 +335,49 @@ app.post('/api/galleries/:id/regenerate', async (c) => {
 
   if (error) return c.json({ error: error.message }, 400)
   await logActivity(auth.supabase, 'REGENERATE_LINK', `Regenerated private link token for gallery "${data.title}"`)
+  await invalidateGalleryCache(c.env)
+  return c.json({ gallery: data })
+})
+
+app.post('/api/galleries/:id/unlock-downloads', async (c) => {
+  const auth = await requirePermission(c, 'manageGalleries')
+  if (!auth.ok) return auth.response
+
+  const galleryId = c.req.param('id')
+  const { data: gallery, error: galleryError } = await auth.supabase
+    .from('galleries')
+    .select('id, title, status, client_id, downloads_enabled, total_amount, amount_paid')
+    .eq('id', galleryId)
+    .maybeSingle()
+
+  if (galleryError || !gallery) return c.json({ error: 'Gallery not found' }, 404)
+
+  const totalAmount = Number((gallery as Record<string, unknown>).total_amount ?? 0)
+  const amountPaid = Number((gallery as Record<string, unknown>).amount_paid ?? 0)
+  const outstandingBalance = Math.max(0, totalAmount - amountPaid)
+
+  if (!gallery.client_id) {
+    return c.json({ error: 'A client must be linked before download access can be unlocked.' }, 400)
+  }
+
+  if (gallery.status !== 'READY' && gallery.status !== 'PUBLISHED') {
+    return c.json({ error: 'The gallery must be marked ready before downloads can be unlocked.' }, 400)
+  }
+
+  if (outstandingBalance > 0) {
+    return c.json({ error: 'Download access is blocked until the remaining balance is paid.' }, 400)
+  }
+
+  const { data, error } = await auth.supabase
+    .from('galleries')
+    .update({ downloads_enabled: true, status: 'READY' })
+    .eq('id', galleryId)
+    .select()
+    .single()
+
+  if (error) return c.json({ error: error.message }, 400)
+
+  await logActivity(auth.supabase, 'DOWNLOAD_UNLOCKED', `Unlocked downloads for "${data.title}" (${galleryId})`)
   await invalidateGalleryCache(c.env)
   return c.json({ gallery: data })
 })
@@ -419,7 +464,125 @@ async function finalizePhotoInsert(
 
 const MAX_PHOTO_BYTES = 100 * 1024 * 1024 // Cloudflare's own request-body ceiling on Free/Pro
 
+// ── 4a. Presigned upload — browser bypasses Worker memory entirely ─
+//
+// Phase 1: browser asks for a short-lived R2 PUT URL.
+// Phase 2: browser PUTs bytes directly to R2 (no Worker involvement).
+// Phase 3: browser calls /finalize to write the DB record.
+//
+// This eliminates the Worker memory spike that caused OOM on large
+// mobile batches. The legacy multipart endpoint stays so existing
+// integrations don't break.
+
+app.post('/api/galleries/:id/photos/presign', async (c) => {
+  const auth = await requireAnyPermission(c, ['manageGalleries', 'uploadPhotos'])
+  if (!auth.ok) return auth.response
+
+  const galleryId = c.req.param('id')
+  const body = await c.req.json<{
+    filename: string
+    mimeType: string
+    size: number
+    albumId?: string | null
+    sortOrder?: number
+    includePreview?: boolean
+  }>()
+
+  if (!body.filename?.trim()) return c.json({ error: 'filename is required' }, 400)
+  if (!isAllowedImageType(body.mimeType ?? '')) {
+    return c.json({ error: 'Only JPEG, PNG, WebP, and AVIF images are accepted.' }, 400)
+  }
+  if (!body.size || body.size <= 0) return c.json({ error: 'size must be a positive number.' }, 400)
+  if (body.size > MAX_PHOTO_BYTES) return c.json({ error: 'Photo exceeds the 100MB upload limit.' }, 400)
+
+  const albumId = body.albumId ?? null
+  try {
+    await assertGalleryAndAlbum(auth.supabase, galleryId, albumId)
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : 'Invalid gallery or album.' }, 400)
+  }
+
+  const filename = safeFilename(body.filename)
+  const r2Key = `${galleryId}/${crypto.randomUUID()}-${filename}`
+
+  // 15-minute presigned PUT URL — long enough for a slow mobile upload
+  // but short enough to limit misuse if intercepted.
+  const TTL = 900
+  const uploadUrl = await (c.env.PHOTOS as R2Bucket & {
+    createPresignedUrl: (key: string, opts: { expiresIn: number; httpMethod: string }) => Promise<string>
+  }).createPresignedUrl(r2Key, { expiresIn: TTL, httpMethod: 'PUT' })
+
+  let previewUploadUrl: string | undefined
+  let previewR2Key: string | undefined
+  if (body.includePreview) {
+    previewR2Key = `${galleryId}/preview-${crypto.randomUUID()}.webp`
+    previewUploadUrl = await (c.env.PHOTOS as R2Bucket & {
+      createPresignedUrl: (key: string, opts: { expiresIn: number; httpMethod: string }) => Promise<string>
+    }).createPresignedUrl(previewR2Key, { expiresIn: TTL, httpMethod: 'PUT' })
+  }
+
+  return c.json({ uploadUrl, r2Key, previewUploadUrl, previewR2Key })
+})
+
+// Phase 3: browser reports that the direct R2 PUT succeeded.
+// We verify the object exists, write the DB row, and award XP.
+app.post('/api/galleries/:id/photos/finalize', async (c) => {
+  const auth = await requireAnyPermission(c, ['manageGalleries', 'uploadPhotos'])
+  if (!auth.ok) return auth.response
+
+  const galleryId = c.req.param('id')
+  const body = await c.req.json<{
+    r2Key: string
+    previewR2Key?: string | null
+    albumId?: string | null
+    sortOrder: number
+    size: number
+    mimeType: string
+  }>()
+
+  // Guard against cross-gallery r2Key injection
+  if (!body.r2Key?.startsWith(`${galleryId}/`)) {
+    return c.json({ error: 'r2Key does not belong to this gallery.' }, 400)
+  }
+  if (!isAllowedImageType(body.mimeType ?? '')) {
+    return c.json({ error: 'Unrecognised MIME type.' }, 400)
+  }
+
+  // Confirm the object actually landed in R2 before creating the DB row.
+  // headObject is cheaper than get + stream.
+  const head = await c.env.PHOTOS.head(body.r2Key)
+  if (!head) return c.json({ error: 'Upload not found in storage — the presigned URL may have expired.' }, 400)
+
+  const albumId = body.albumId ?? null
+  try {
+    await assertGalleryAndAlbum(auth.supabase, galleryId, albumId)
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : 'Invalid gallery or album.' }, 400)
+  }
+
+  try {
+    const photo = await finalizePhotoInsert(
+      c,
+      auth.supabase,
+      galleryId,
+      body.r2Key,
+      body.previewR2Key ?? null,
+      albumId,
+      Number.isFinite(body.sortOrder) ? body.sortOrder : 0,
+      body.size,
+      body.mimeType,
+    )
+    await awardXP(auth.supabase, auth.staff.id, 10) // 10 XP per photo
+    return c.json({ photo }, 201)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Finalize failed'
+    console.error(`[upload] finalize failed for gallery ${galleryId}:`, message)
+    return c.json({ error: message }, 400)
+  }
+})
+
 // Multipart form upload — used by the Darkroom's multi-file picker.
+
 app.post('/api/galleries/:id/photos', async (c) => {
   const auth = await requireAnyPermission(c, ['manageGalleries', 'uploadPhotos'])
   if (!auth.ok) return auth.response
@@ -682,6 +845,39 @@ app.patch('/api/clients/:id', async (c) => {
   return c.json({ client: data })
 })
 
+// Records a payment as a delta, not an absolute value — the previous
+// approach had the browser read amount_paid, add the payment locally,
+// and PATCH the sum back. Two payments recorded close together (two
+// staff, or two tabs) could race on that locally-cached value and one
+// payment would silently overwrite the other. record_client_payment()
+// does `amount_paid = amount_paid + p_amount` as a single atomic UPDATE,
+// so this can no longer lose a payment no matter how it's timed.
+app.post('/api/clients/:id/payments', async (c) => {
+  const auth = await requirePermission(c, 'viewFinances')
+  if (!auth.ok) return auth.response
+
+  const body = await c.req.json<{ amount?: number }>()
+  const amount = Number(body.amount)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return c.json({ error: 'Payment amount must be a positive number.' }, 400)
+  }
+
+  const { data, error } = await auth.supabase.rpc('record_client_payment', {
+    p_client_id: c.req.param('id'),
+    p_amount: amount,
+  })
+
+  if (error) {
+    // record_client_payment raises its own friendly messages ("Client not
+    // found.", "Payment would exceed the total amount owed.") — safe to
+    // surface directly rather than the generic dbError() fallback.
+    return c.json({ error: error.message }, 400)
+  }
+
+  await logActivity(auth.supabase, 'RECORD_PAYMENT', `Recorded a payment of ${amount} for client "${data.name}"`)
+  return c.json({ client: data })
+})
+
 app.delete('/api/clients/:id', async (c) => {
   const auth = await requirePermission(c, 'viewFinances')
   if (!auth.ok) return auth.response
@@ -776,7 +972,12 @@ app.get('/api/studio/me', async (c) => {
 })
 
 app.get('/api/studio/staff', async (c) => {
-  const auth = await requirePermission(c, 'manageStaff')
+  // RLS on studio_staff only lets a non-owner read their own row — a staff
+  // member with permissions.manageStaff = true but role !== 'owner' would
+  // previously pass this check and then silently get back just themselves
+  // instead of the full roster. Owner-only here matches what the query can
+  // actually return.
+  const auth = await requireOwner(c)
   if (!auth.ok) return auth.response
 
   const { data, error } = await auth.supabase
@@ -789,7 +990,7 @@ app.get('/api/studio/staff', async (c) => {
 })
 
 app.patch('/api/studio/staff/:id', async (c) => {
-  const auth = await requirePermission(c, 'manageStaff')
+  const auth = await requireOwner(c)
   if (!auth.ok) return auth.response
 
   // The UI disables editing your own row (StaffView.tsx) so nobody

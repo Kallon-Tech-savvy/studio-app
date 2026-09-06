@@ -17,14 +17,10 @@ import {
 interface GalleryDirectoryProps {
   galleries: Gallery[]
   clientById: Map<string, Client>
-
   selectedGalleryId: string
-
   copiedToken: string | null
   deletingId: string | null
-
   canManageGalleries: boolean
-
   onSelect: (id: string) => void
   onCopyLink: (token: string) => void
   onDelete: (id: string) => void
@@ -54,35 +50,14 @@ export function GalleryDirectory({
       ) : (
         <ul className="roll-status-list">
           {galleries.map(gallery => {
-            const client =
-              clientById.get(
-                gallery.client_id ?? '',
-              ) ?? null
+            const client = clientById.get(gallery.client_id ?? '') ?? null
 
-            const balance =
-              client
-                ? Math.max(
-                    0,
-                    Number(
-                      client.total_amount,
-                    ) -
-                      Number(
-                        client.amount_paid,
-                      ),
-                  )
-                : 0
+            const balance = client
+              ? Math.max(0, Number(client.total_amount) - Number(client.amount_paid))
+              : 0
 
-            const accessState =
-              GALLERY_ACCESS_LABELS[
-                getGalleryAccessState(
-                  gallery,
-                  client,
-                )
-              ]
-
-            const selected =
-              gallery.id ===
-              selectedGalleryId
+            const accessState = GALLERY_ACCESS_LABELS[getGalleryAccessState(gallery, client)]
+            const selected = gallery.id === selectedGalleryId
 
             return (
               <li
@@ -93,40 +68,32 @@ export function GalleryDirectory({
                     : 'gallery-directory-item'
                 }
               >
+                {/* Main row — min-height enforced by CSS for 44px tap target */}
                 <div className="gallery-directory-item__main">
                   <button
                     type="button"
                     className="gallery-directory-item__title"
-                    onClick={() =>
-                      onSelect(gallery.id)
-                    }
+                    onClick={() => onSelect(gallery.id)}
+                    aria-current={selected ? 'true' : undefined}
                   >
                     <span
                       className={`status-dot ${
-                        gallery.status ===
-                        'PUBLISHED'
-                          ? 'status-dot--published'
-                          : ''
+                        gallery.status === 'PUBLISHED' ? 'status-dot--published' : ''
                       }`}
                     />
-
                     {gallery.title}
                   </button>
 
                   <div className="gallery-directory-item__actions">
+                    {/* icon-button size raised to 44×44 in CSS */}
                     <button
                       type="button"
                       className="icon-button"
-                      onClick={() =>
-                        onCopyLink(
-                          gallery.access_token,
-                        )
-                      }
+                      onClick={() => onCopyLink(gallery.access_token)}
                       title="Copy private client link"
                       aria-label="Copy private client link"
                     >
-                      {copiedToken ===
-                      gallery.access_token ? (
+                      {copiedToken === gallery.access_token ? (
                         <CheckIcon size={14} />
                       ) : (
                         <LinkIcon />
@@ -137,11 +104,7 @@ export function GalleryDirectory({
                       <button
                         type="button"
                         className="icon-button icon-button--danger"
-                        onClick={() =>
-                          onDelete(
-                            gallery.id,
-                          )
-                        }
+                        onClick={() => onDelete(gallery.id)}
                         disabled={deletingId === gallery.id}
                         title={`Delete ${gallery.title}`}
                         aria-label={`Delete ${gallery.title}`}
@@ -154,37 +117,17 @@ export function GalleryDirectory({
 
                 <div className="gallery-meta">
                   <span>
-                    Status:{' '}
-                    <strong>
-                      {gallery.status}
-                    </strong>
+                    Status: <strong>{gallery.status}</strong>
                   </span>
-
+                  <span>{accessState}</span>
                   <span>
-                    {accessState}
-                  </span>
-
-                  <span>
-                    Balance:{' '}
-                    <strong>
-                      NLe{' '}
-                      {balance.toLocaleString()}
-                    </strong>
+                    Balance: <strong>NLe {balance.toLocaleString()}</strong>
                   </span>
                 </div>
 
                 <div className="gallery-meta gallery-meta--secondary">
-                  <span>
-                    {client?.name ??
-                      'No client attached'}
-                  </span>
-
-                  <span>
-                    Shoot Date:{' '}
-                    {new Date(
-                      gallery.event_date,
-                    ).toLocaleDateString()}
-                  </span>
+                  <span>{client?.name ?? 'No client attached'}</span>
+                  <span>Shoot Date: {new Date(gallery.event_date).toLocaleDateString()}</span>
                 </div>
               </li>
             )

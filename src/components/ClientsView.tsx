@@ -137,13 +137,14 @@ export function ClientsView({
     const client = clients.find(c => c.id === clientId)
     if (!client) return
 
-    const newAmountPaid = Number(client.amount_paid ?? 0) + Number(paymentAmount)
-
     try {
-      await adminApi.clients.update(
+      // The server adds paymentAmount to whatever the current balance
+      // actually is at write time — no locally-cached total involved, so
+      // two payments recorded close together can't clobber each other.
+      await adminApi.clients.recordPayment(
         accessToken,
         clientId,
-        { amount_paid: newAmountPaid },
+        paymentAmount,
       )
 
       await loadClients()

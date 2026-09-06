@@ -22,6 +22,7 @@ interface AdminTabsProps {
 
   canViewFinances: boolean
   canManageStaff: boolean
+  isOwner: boolean
 }
 
 export function AdminTabs({
@@ -31,6 +32,7 @@ export function AdminTabs({
   clientCount,
   canViewFinances,
   canManageStaff,
+  isOwner,
 }: AdminTabsProps) {
   const tabs = [
     {
@@ -55,13 +57,18 @@ export function AdminTabs({
         ]
       : []),
 
-    ...(canManageStaff
+    ...(isOwner
       ? [
           {
             id: 'staff' as const,
             label: 'Team',
             icon: <BadgeIcon />,
           },
+        ]
+      : []),
+
+    ...(canManageStaff
+      ? [
           {
             id: 'logs' as const,
             label: 'Audit Logs',

@@ -47,6 +47,12 @@ export const adminApi = {
     create: (token: string, payload: unknown) => request<{ client: Client }>('/api/clients', { accessToken: token, method: 'POST', body: JSON.stringify(payload) }),
     update: (token: string, id: string, payload: Partial<Client>) => request<{ client: Client }>(`/api/clients/${id}`, { accessToken: token, method: 'PATCH', body: JSON.stringify(payload) }),
     delete: (token: string, id: string) => request<{ success: true }>(`/api/clients/${id}`, { accessToken: token, method: 'DELETE', headers: {} }),
+    // Sends the payment as a delta — the server adds it to the current
+    // balance atomically. Never compute the new total client-side and
+    // send it as an absolute value; that's the race this endpoint exists
+    // to avoid.
+    recordPayment: (token: string, id: string, amount: number) =>
+      request<{ client: Client }>(`/api/clients/${id}/payments`, { accessToken: token, method: 'POST', body: JSON.stringify({ amount }) }),
   },
   galleries: {
     list: (token: string) => request<{ galleries: Gallery[] }>('/api/studio/galleries', { accessToken: token }),
@@ -55,6 +61,7 @@ export const adminApi = {
     delete: (token: string, id: string) => request<{ success: true }>(`/api/galleries/${id}`, { accessToken: token, method: 'DELETE', headers: {} }),
     revoke: (token: string, id: string) => request<{ gallery: Gallery }>(`/api/galleries/${id}/revoke`, { accessToken: token, method: 'POST', headers: {} }),
     regenerate: (token: string, id: string) => request<{ gallery: Gallery }>(`/api/galleries/${id}/regenerate`, { accessToken: token, method: 'POST', headers: {} }),
+    unlockDownloads: (token: string, id: string) => request<{ gallery: Gallery }>(`/api/galleries/${id}/unlock-downloads`, { accessToken: token, method: 'POST', headers: {} }),
     sendEmail: (token: string, id: string) => request<{ message?: string }>(`/api/galleries/${id}/send-email`, { accessToken: token, method: 'POST', headers: {} }),
     albums: {
       list: (token: string, galleryId: string) => request<{ albums: Album[] }>(`/api/galleries/${galleryId}/albums`, { accessToken: token }),
@@ -65,6 +72,48 @@ export const adminApi = {
     },
     photos: {
       list: (token: string, galleryId: string) => request<{ photos: Photo[] }>(`/api/galleries/${galleryId}/photos`, { accessToken: token }),
+
+      /**
+       * Phase 1 of the presigned upload flow.
+       * Returns a short-lived PUT URL that the browser can use to stream
+       * the file directly to R2, bypassing the Worker entirely.
+       */
+      presign: (
+        token: string,
+        galleryId: string,
+        payload: {
+          filename: string
+          mimeType: string
+          size: number
+          albumId?: string | null
+          sortOrder?: number
+          includePreview?: boolean
+        },
+      ) =>
+        request<{ uploadUrl: string; r2Key: string; previewUploadUrl?: string; previewR2Key?: string }>(
+          `/api/galleries/${galleryId}/photos/presign`,
+          { accessToken: token, method: 'POST', body: JSON.stringify(payload) },
+        ),
+
+      /**
+       * Phase 3 of the presigned upload flow.
+       * Called after the browser PUT to R2 has succeeded.
+       * Creates the DB record and awards XP.
+       */
+      finalize: (
+        token: string,
+        galleryId: string,
+        payload: {
+          r2Key: string
+          previewR2Key?: string | null
+          albumId?: string | null
+          sortOrder: number
+          size: number
+          mimeType: string
+        },
+      ) => request<{ photo: Photo }>(`/api/galleries/${galleryId}/photos/finalize`, { accessToken: token, method: 'POST', body: JSON.stringify(payload) }),
+
+      /** Legacy multipart upload — used as a fallback if presign is unavailable. */
       upload: (token: string, galleryId: string, file: File, options: { albumId?: string; sortOrder: number; preview?: Blob }) => {
         const form = new FormData()
         form.append('file', file)

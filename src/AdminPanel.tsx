@@ -37,15 +37,19 @@ import {
 
 import {
   AdminNoticeProvider,
+  describeError,
+  useAdminNotice,
 } from './components/AdminNotice'
+
+import { adminApi } from './services/adminApi'
 
 import {
   AdminTabs,
 } from './components/AdminTabs'
 
 import {
-  DashboardView,
-} from './components/DashboardView'
+  CommandCenter,
+} from './studio/CommandCenter'
 
 import {
   GalleriesView,
@@ -77,7 +81,7 @@ interface AdminPanelProps {
   staff: StaffMember
 }
 
-export function AdminPanel({
+function AdminPanelContent({
   session,
   staff,
 }: AdminPanelProps) {
@@ -85,6 +89,13 @@ export function AdminPanel({
     Boolean(
       staff.permissions.manageStaff,
     )
+
+  // The studio_staff table's only write policy is owner-only (see
+  // schema.sql), and GET /api/studio/staff now enforces the same —
+  // a non-owner with permissions.manageStaff: true can still see the
+  // Audit Logs (that stays permission-gated, matching activity_log's
+  // own RLS), but editing the Team roster is owner-only everywhere.
+  const isOwner = staff.role === 'owner'
 
   const canManageGalleries =
     Boolean(
@@ -117,6 +128,19 @@ export function AdminPanel({
     canManageStaff,
   })
 
+  const notify = useAdminNotice()
+
+  async function handleUnlockDownloads(galleryId: string) {
+    try {
+      await adminApi.galleries.unlockDownloads(session.access_token, galleryId)
+      await data.loadGalleries()
+      await data.loadLogs()
+      notify('Downloads unlocked for this gallery.', 'success')
+    } catch (error) {
+      notify(describeError(error, 'Could not unlock downloads for this gallery.'), 'error')
+    }
+  }
+
   const galleriesByClientId =
     useMemo(
       () =>
@@ -141,12 +165,11 @@ export function AdminPanel({
     )
 
   return (
-    <AdminNoticeProvider>
-      <section className="darkroom admin-panel">
-        <AdminHeader
-          session={session}
-          staff={staff}
-        />
+    <section className="darkroom admin-panel">
+      <AdminHeader
+        session={session}
+        staff={staff}
+      />
 
       <AdminTabs
         activeTab={activeTab}
@@ -162,6 +185,9 @@ export function AdminPanel({
         }
         canManageStaff={
           canManageStaff
+        }
+        isOwner={
+          isOwner
         }
       />
 
@@ -198,28 +224,26 @@ export function AdminPanel({
 
       {activeTab ===
         'dashboard' && (
-        <DashboardView
+        <CommandCenter
           galleries={
             data.galleries
           }
-          logs={data.logs}
-          clientCount={
-            data.clients.length
+          clients={
+            data.clients
           }
-          financialSummary={
-            financialSummary
+          logs={
+            data.logs
           }
-          canViewFinances={
-            canViewFinances
+          onUnlockDownloads={
+            handleUnlockDownloads
           }
-          onOpenGalleries={() =>
-            setActiveTab(
-              'galleries',
-            )
-          }
-          onOpenClients={() =>
-            setActiveTab(
-              'clients',
+          photoCounts={
+            data.photos.reduce(
+              (acc, photo) => {
+                acc[photo.gallery_id] = (acc[photo.gallery_id] ?? 0) + 1
+                return acc
+              },
+              {} as Record<string, number>,
             )
           }
         />
@@ -290,7 +314,7 @@ export function AdminPanel({
 
       {activeTab ===
         'staff' &&
-        canManageStaff && (
+        isOwner && (
           <StaffView
             staff={data.staff}
             accessToken={
@@ -312,7 +336,14 @@ export function AdminPanel({
             logs={data.logs}
           />
         )}
-      </section>
+    </section>
+  )
+}
+
+export function AdminPanel(props: AdminPanelProps) {
+  return (
+    <AdminNoticeProvider>
+      <AdminPanelContent {...props} />
     </AdminNoticeProvider>
   )
 }

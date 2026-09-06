@@ -43,7 +43,7 @@ function Roll({ gallery, index }: { gallery: Gallery; index: number }) {
           <span className="roll-label">Roll {String(index + 1).padStart(2, '0')}</span>
           <span className="roll-title">{gallery.title}</span>
         </span>
-        <span className="roll-count">Open gallery →</span>
+        <span className="roll-count">Open gallery</span>
       </a>
     </li>
   )

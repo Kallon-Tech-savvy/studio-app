@@ -1010,3 +1010,92 @@ $$;
 
 revoke all on function public.photo_r2_key_by_token(text, uuid) from public, anon, authenticated;
 grant execute on function public.photo_r2_key_by_token(text, uuid) to anon, authenticated;
+
+
+-- ================================================================
+-- 10. ATOMIC MUTATIONS
+--
+-- These replace read-then-write patterns that used to run in the
+-- Worker (fetch a value, add to it client-side, write it back).
+-- Two concurrent callers doing that can race and silently lose an
+-- update. Folding the whole read-modify-write into one SQL statement
+-- makes each of these atomic at the database level regardless of how
+-- many requests arrive at once.
+-- ================================================================
+
+-- security invoker (the default): runs as the calling user, so the
+-- existing "finance staff can update clients" RLS policy on
+-- public.clients still applies — this only changes *how* the update
+-- is computed, not *who* is allowed to call it.
+create or replace function public.record_client_payment(p_client_id uuid, p_amount numeric)
+returns public.clients
+language plpgsql
+set search_path = public
+as $$
+declare
+  result public.clients;
+begin
+  if p_amount <= 0 then
+    raise exception 'Payment amount must be positive.';
+  end if;
+
+  update public.clients
+  set amount_paid = amount_paid + p_amount,
+      updated_at = now()
+  where id = p_client_id
+  returning * into result;
+
+  if result.id is null then
+    raise exception 'Client not found.';
+  end if;
+
+  if result.amount_paid > result.total_amount then
+    raise exception 'Payment would exceed the total amount owed.';
+  end if;
+
+  return result;
+end;
+$$;
+
+revoke all on function public.record_client_payment(uuid, numeric) from public, anon, authenticated;
+grant execute on function public.record_client_payment(uuid, numeric) to authenticated;
+
+
+-- security definer here is deliberate: studio_staff's only write policy
+-- ("owners can manage all staff") restricts UPDATE to owners, so a
+-- photographer or assistant earning XP for their own upload/publish
+-- action would otherwise be blocked by RLS. This function runs as its
+-- owner (bypassing that policy) but only ever touches the single row
+-- identified by p_staff_id with a fixed, server-chosen amount — it does
+-- not let a caller edit anyone's role or permissions, so it doesn't
+-- reopen the privilege-escalation risk that policy exists to prevent.
+create or replace function public.award_staff_xp(p_staff_id uuid, p_amount int)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.studio_staff
+  set experience_points = experience_points + p_amount,
+      updated_at = now()
+  where id = p_staff_id;
+$$;
+
+revoke all on function public.award_staff_xp(uuid, int) from public, anon, authenticated;
+grant execute on function public.award_staff_xp(uuid, int) to authenticated;
+
+
+create or replace function public.increment_galleries_published(p_staff_id uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.studio_staff
+  set galleries_published = galleries_published + 1,
+      updated_at = now()
+  where id = p_staff_id;
+$$;
+
+revoke all on function public.increment_galleries_published(uuid) from public, anon, authenticated;
+grant execute on function public.increment_galleries_published(uuid) to authenticated;

@@ -5,6 +5,15 @@ import { ToastProvider, useToast } from './components/Toast'
 import { SelectionBar } from './components/SelectionBar'
 import { Lightbox } from './components/Lightbox'
 import type { ProofAlbum, ProofGalleryMeta, ProofPhoto } from './components/proofTypes'
+import { loadSelectionSnapshot, saveSelectionSnapshot } from './storage/indexedDb'
+import { getSyncStatus } from './sync/client'
+import {
+  enqueueOutboxMutation,
+  getPendingOutboxMutations,
+  hydrateOutboxMutationFromSelection,
+  type OutboxMutation,
+} from './sync/outbox'
+import { createSelectionMutation } from './sync/selection'
 import './client-gallery.css'
 
 // Client-facing gallery for a single roll, reached at /g/:accessToken.
@@ -25,6 +34,10 @@ type LoadState =
 
 function galleryCacheKey(accessToken: string) {
   return `proof-gallery-cache:${accessToken}`
+}
+
+function outboxCacheKey(accessToken: string) {
+  return `proof-gallery-outbox:${accessToken}`
 }
 
 function readGalleryCache(accessToken: string): LoadState {
@@ -93,6 +106,13 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
 
   const [state, setState] = useState<LoadState>(() => readGalleryCache(accessToken))
   const [activeAlbumId, setActiveAlbumId] = useState<string | 'all'>('all')
+  const [showOnlySelected, setShowOnlySelected] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(`proof-gallery-filter:${accessToken}`) === 'selected'
+    } catch {
+      return false
+    }
+  })
   const [selected, setSelected] = useState<Set<string>>(() => {
     try {
       return new Set(JSON.parse(localStorage.getItem(`proof-gallery-selection:${accessToken}`) || '[]'))
@@ -100,8 +120,40 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
       return new Set()
     }
   })
+  const [outbox, setOutbox] = useState<OutboxMutation[]>(() => {
+    try {
+      const raw = localStorage.getItem(outboxCacheKey(accessToken))
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  })
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    void loadSelectionSnapshot(accessToken).then((ids) => {
+      if (!cancelled) setSelected(new Set(ids))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken])
+
+  useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine)
+    window.addEventListener('online', updateOnlineState)
+    window.addEventListener('offline', updateOnlineState)
+    return () => {
+      window.removeEventListener('online', updateOnlineState)
+      window.removeEventListener('offline', updateOnlineState)
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -182,20 +234,37 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
   const photos = state.status === 'ready' ? state.photos : []
 
   const visiblePhotos = useMemo(() => {
-    if (activeAlbumId === 'all') return photos
-    return photos.filter((photo) => photo.albumId === activeAlbumId)
-  }, [photos, activeAlbumId])
+    const source = activeAlbumId === 'all' ? photos : photos.filter((photo) => photo.albumId === activeAlbumId)
+    if (showOnlySelected) return source.filter((photo) => selected.has(photo.id))
+    return source
+  }, [photos, activeAlbumId, selected, showOnlySelected])
 
   const toggleSelect = useCallback((id: string) => {
     setSelected((current) => {
       const next = new Set(current)
-      if (next.has(id)) next.delete(id)
+      const selectedNow = next.has(id)
+      const mutation = createSelectionMutation(id, !selectedNow, 'favorites')
+      setOutbox((queue) => enqueueOutboxMutation(queue, hydrateOutboxMutationFromSelection(mutation)))
+      if (selectedNow) next.delete(id)
       else next.add(id)
       return next
     })
   }, [])
 
-  const clearSelection = useCallback(() => setSelected(new Set()), [])
+  const clearSelection = useCallback(() => {
+    const idsToClear = Array.from(selected)
+    if (idsToClear.length === 0) return
+
+    setOutbox((queue) => {
+      const nextQueue = [...queue]
+      for (const id of idsToClear) {
+        const mutation = createSelectionMutation(id, false, 'favorites')
+        nextQueue.unshift(hydrateOutboxMutationFromSelection(mutation))
+      }
+      return nextQueue
+    })
+    setSelected(new Set())
+  }, [selected])
 
   useEffect(() => {
     try {
@@ -203,7 +272,25 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
     } catch {
       // Selection persistence is best effort.
     }
+
+    void saveSelectionSnapshot(accessToken, Array.from(selected))
   }, [accessToken, selected])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`proof-gallery-filter:${accessToken}`, showOnlySelected ? 'selected' : 'all')
+    } catch {
+      // Filter persistence is best effort.
+    }
+  }, [accessToken, showOnlySelected])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(outboxCacheKey(accessToken), JSON.stringify(outbox))
+    } catch {
+      // Outbox persistence is best effort.
+    }
+  }, [accessToken, outbox])
 
   const handleLockedSelect = useCallback(
     (photo: ProofPhoto) => {
@@ -217,28 +304,38 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
 
   const handleDownload = useCallback(async () => {
     if (selected.size === 0) return
+
     setDownloading(true)
+    setDownloadProgress(0)
+
     try {
       const zip = new JSZip()
       const photoIds = Array.from(selected)
-      const responses = await Promise.all(
-        photoIds.map(async (photoId, index) => {
+      const chunkSize = 3
+
+      for (let chunkIndex = 0; chunkIndex < photoIds.length; chunkIndex += chunkSize) {
+        const slice = photoIds.slice(chunkIndex, chunkIndex + chunkSize)
+
+        for (let itemIndex = 0; itemIndex < slice.length; itemIndex += 1) {
+          const photoId = slice[itemIndex]
+          const absoluteIndex = chunkIndex + itemIndex + 1
           const res = await fetch(
             `/api/g/${encodeURIComponent(accessToken)}/photos/${encodeURIComponent(photoId)}?download=true`,
           )
+
           if (!res.ok) {
             const body = await res.json().catch(() => ({}))
-            throw new Error(body.error || `Could not download proof ${index + 1}.`)
+            throw new Error(body.error || `Could not download proof ${absoluteIndex}.`)
           }
-          return { index, blob: await res.blob() }
-        }),
-      )
 
-      for (const { index, blob } of responses) {
-        zip.file(`proof-${String(index + 1).padStart(3, '0')}.jpg`, blob)
+          const blob = await res.blob()
+          const safeName = `proof-${String(absoluteIndex).padStart(3, '0')}${blob.type.includes('png') ? '.png' : '.jpg'}`
+          zip.file(safeName, blob)
+          setDownloadProgress(Math.round((absoluteIndex / photoIds.length) * 100))
+        }
       }
 
-      const blob = await zip.generateAsync({ type: 'blob' })
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 5 } })
       const url = URL.createObjectURL(blob)
       const galleryTitle = state.status === 'ready' ? state.gallery.title : 'proofs'
       const link = document.createElement('a')
@@ -249,6 +346,7 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
       link.remove()
       URL.revokeObjectURL(url)
 
+      setDownloadProgress(100)
       const count = selected.size
       showToast(`${count} ${count === 1 ? 'proof' : 'proofs'} downloaded.`, { tone: 'success' })
       clearSelection()
@@ -256,6 +354,7 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
       showToast(err instanceof Error ? err.message : 'Download failed. Try again.', { tone: 'error' })
     } finally {
       setDownloading(false)
+      setDownloadProgress(0)
     }
   }, [accessToken, selected, state, showToast, clearSelection])
 
@@ -294,6 +393,58 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
   }
 
   const { gallery, albums } = state
+  const pendingMutations = useMemo(() => getPendingOutboxMutations(outbox), [outbox])
+  const pendingCount = pendingMutations.length
+  const syncStatus = getSyncStatus(isOnline, pendingCount)
+
+  useEffect(() => {
+    if (!isOnline || pendingMutations.length === 0) return
+
+    let cancelled = false
+    const syncIds = new Set(pendingMutations.map((mutation) => mutation.id))
+
+    setOutbox((queue) => queue.map((item) => (syncIds.has(item.id) ? { ...item, status: 'syncing' } : item)))
+
+    const replaySelectionMutations = async () => {
+      try {
+        const response = await fetch(`/api/g/${encodeURIComponent(accessToken)}/selection/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mutations: pendingMutations.map((mutation) => ({
+              id: mutation.id,
+              type: mutation.type,
+              payload: mutation.payload,
+              createdAt: mutation.createdAt,
+              retryCount: mutation.retryCount,
+            })),
+          }),
+        })
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}))
+          const errorMessage = body.error || 'Selection sync is temporarily unavailable.'
+          throw new Error(errorMessage)
+        }
+
+        if (!cancelled) {
+          setOutbox((queue) => queue.filter((item) => !syncIds.has(item.id)))
+        }
+      } catch (error) {
+        if (cancelled) return
+
+        const message = error instanceof Error ? error.message : 'Selection sync failed. We will retry when the connection is back.'
+        showToast(message, { tone: 'info' })
+        setOutbox((queue) => queue.map((item) => (syncIds.has(item.id) ? { ...item, status: 'failed', retryCount: item.retryCount + 1 } : item)))
+      }
+    }
+
+    void replaySelectionMutations()
+
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, isOnline, pendingMutations, showToast])
 
   return (
     <div className={`pg-gallery${prefersReducedMotion ? ' pg-gallery--reduced-motion' : ''}`}>
@@ -335,7 +486,7 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
             className={`pg-chip${activeAlbumId === 'all' ? ' pg-chip--active' : ''}`}
             onClick={() => setActiveAlbumId('all')}
           >
-            All
+            All photos
           </button>
           {albums.map((album) => (
             <button
@@ -349,6 +500,14 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
               {album.title}
             </button>
           ))}
+          <button
+            type="button"
+            className={`pg-chip pg-chip--toggle${showOnlySelected ? ' pg-chip--active' : ''}`}
+            onClick={() => setShowOnlySelected((current) => !current)}
+            aria-pressed={showOnlySelected}
+          >
+            {showOnlySelected ? 'Selected proofs only' : 'Selected proofs'}
+          </button>
         </div>
       )}
 
@@ -421,9 +580,14 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
 
       <SelectionBar
         count={selected.size}
+        total={photos.length}
         onDownload={handleDownload}
         onClear={clearSelection}
         downloading={downloading}
+        downloadProgress={downloadProgress}
+        syncStatus={syncStatus}
+        showOnlySelected={showOnlySelected}
+        onToggleShowOnlySelected={() => setShowOnlySelected((current) => !current)}
       />
     </div>
   )

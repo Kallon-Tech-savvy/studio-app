@@ -34,7 +34,6 @@ export function ClientCreateForm({
     <section className="client-create-panel" aria-labelledby="client-create-title">
       <div className="client-create-panel__header">
         <div>
-          <span className="admin-eyebrow">New account / 01</span>
           <h3 id="client-create-title">Add a Client</h3>
         </div>
         <span className="client-create-panel__signal" aria-hidden="true">●</span>

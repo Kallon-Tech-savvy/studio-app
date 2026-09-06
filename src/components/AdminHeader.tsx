@@ -18,10 +18,6 @@ export function AdminHeader({
   return (
     <header className="admin-header">
       <div>
-        <span className="admin-eyebrow">
-          Darkroom Workspace
-        </span>
-
         <h2>
           Welcome back, {displayName}
         </h2>

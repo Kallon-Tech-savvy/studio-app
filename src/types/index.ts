@@ -117,14 +117,39 @@ export type Log = {
 
 // ── Upload queue ──────────────────────────────────────────────────
 
-export type UploadStatus = 'pending' | 'success' | 'failed'
+export type UploadStatus = 'pending' | 'compressing' | 'uploading' | 'success' | 'failed'
 
 export type UploadQueueItem = {
   id: string
   filename: string
   status: UploadStatus
+  /** 0–100 upload progress percentage, only meaningful when status is 'uploading' */
+  progress?: number
   error?: string
 }
+
+// ── Presigned upload ──────────────────────────────────────────────
+
+/**
+ * Short-lived presigned ticket returned by POST .../photos/presign.
+ * The browser uses uploadUrl to PUT the master directly to R2, then
+ * calls /finalize to create the DB record.
+ */
+export type PresignedUploadTicket = {
+  uploadUrl: string
+  r2Key: string
+  previewUploadUrl?: string
+  previewR2Key?: string
+}
+
+// ── Optimistic album ──────────────────────────────────────────────
+
+/**
+ * An album that has been added to local state optimistically before
+ * the server confirms the creation. Components should render a spinner
+ * and suppress destructive actions while this flag is set.
+ */
+export type OptimisticAlbum = Album & { _optimistic: true }
 
 // ── Payment ───────────────────────────────────────────────────────
 

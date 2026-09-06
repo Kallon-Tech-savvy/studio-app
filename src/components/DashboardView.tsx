@@ -104,14 +104,14 @@ export function DashboardView({
         <div className="financial-health-card">
           <div className="financial-health-card__header">
             <div>
-              <span className="admin-eyebrow">Financial Health</span>
-              <h4 style={{ margin: '4px 0 0', fontSize: '1rem' }}>
-                Collection Rate: <strong>{formatPercent(financialSummary.collectionRate)}</strong>
-              </h4>
+              <h4 style={{ margin: 0, fontSize: '1rem' }}>Financial Health</h4>
+              <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                Collection rate: <strong style={{ color: 'var(--ink)' }}>{formatPercent(financialSummary.collectionRate)}</strong>
+              </p>
             </div>
             {onOpenClients && (
               <Button variant="secondary" onClick={onOpenClients}>
-                Manage Accounts →
+                Manage accounts
               </Button>
             )}
           </div>
