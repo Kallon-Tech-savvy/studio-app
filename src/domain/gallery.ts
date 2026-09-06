@@ -17,15 +17,17 @@ import type { Client, Gallery, GalleryAccessState } from '../types'
  * across both AdminPanel.tsx and ClientGallery.tsx.
  */
 export function getGalleryAccessState(
-  gallery: Pick<Gallery, 'status' | 'downloads_enabled'>,
-  client: Pick<Client, 'total_amount' | 'amount_paid'> | null,
+  gallery: Pick<Gallery, 'status' | 'downloads_enabled'> & { total_amount?: number; amount_paid?: number },
+  client?: Pick<Client, 'total_amount' | 'amount_paid'> | null,
 ): GalleryAccessState {
   if (gallery.status === 'DRAFT') return 'draft-only'
   if (gallery.status === 'DISABLED') return 'link-revoked'
 
-  const balance = client
-    ? Math.max(0, Number(client.total_amount) - Number(client.amount_paid))
-    : 0
+  const balance = gallery.total_amount !== undefined
+    ? Math.max(0, Number(gallery.total_amount || 0) - Number(gallery.amount_paid || 0))
+    : client
+      ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
+      : 0
 
   if (balance > 0) return 'payment-locked'
 
@@ -49,25 +51,33 @@ export const GALLERY_ACCESS_LABELS: Record<GalleryAccessState, string> = {
 
 /** Whether a client may download originals from this gallery. */
 export function canDownloadGallery(
-  gallery: Pick<Gallery, 'status' | 'downloads_enabled'>,
-  client: Pick<Client, 'total_amount' | 'amount_paid'> | null,
+  gallery: Pick<Gallery, 'status' | 'downloads_enabled'> & { total_amount?: number; amount_paid?: number },
+  client?: Pick<Client, 'total_amount' | 'amount_paid'> | null,
 ): boolean {
   if (!gallery.downloads_enabled) return false
   if (gallery.status === 'DRAFT') return false
   if (gallery.status !== 'READY' && gallery.status !== 'PUBLISHED') return false
-  if (!client) return true
-  return Math.max(0, Number(client.total_amount) - Number(client.amount_paid)) === 0
+  const balance = gallery.total_amount !== undefined
+    ? Math.max(0, Number(gallery.total_amount || 0) - Number(gallery.amount_paid || 0))
+    : client
+      ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
+      : 0
+  return balance === 0
 }
 
 /** Whether a client may select/favourite photos from this gallery. */
 export function canSelectFromGallery(
-  gallery: Pick<Gallery, 'status' | 'selection_enabled'>,
-  client: Pick<Client, 'total_amount' | 'amount_paid'> | null,
+  gallery: Pick<Gallery, 'status' | 'selection_enabled'> & { total_amount?: number; amount_paid?: number },
+  client?: Pick<Client, 'total_amount' | 'amount_paid'> | null,
 ): boolean {
   if (!gallery.selection_enabled) return false
   if (gallery.status === 'DRAFT') return false
-  if (!client) return true
-  return Math.max(0, Number(client.total_amount) - Number(client.amount_paid)) === 0
+  const balance = gallery.total_amount !== undefined
+    ? Math.max(0, Number(gallery.total_amount || 0) - Number(gallery.amount_paid || 0))
+    : client
+      ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
+      : 0
+  return balance === 0
 }
 
 // ── Delivery status (client-facing) ──────────────────────────────
@@ -79,8 +89,8 @@ export type DeliveryStatusTone = 'warning' | 'danger' | 'muted' | 'success'
  * in the client gallery view.
  */
 export function getDeliveryStatusTone(
-  gallery: Pick<Gallery, 'status' | 'downloads_enabled'>,
-  client: Pick<Client, 'total_amount' | 'amount_paid'> | null,
+  gallery: Pick<Gallery, 'status' | 'downloads_enabled'> & { total_amount?: number; amount_paid?: number },
+  client?: Pick<Client, 'total_amount' | 'amount_paid'> | null,
 ): DeliveryStatusTone {
   const state = getGalleryAccessState(gallery, client)
   switch (state) {
@@ -97,13 +107,15 @@ export function getDeliveryStatusTone(
  * gallery status card. Uses outstanding balance for the message body.
  */
 export function getDeliveryStatusMessage(
-  gallery: Pick<Gallery, 'status' | 'downloads_enabled'>,
-  client: Pick<Client, 'total_amount' | 'amount_paid'> | null,
+  gallery: Pick<Gallery, 'status' | 'downloads_enabled'> & { total_amount?: number; amount_paid?: number },
+  client?: Pick<Client, 'total_amount' | 'amount_paid'> | null,
 ): string {
   const state = getGalleryAccessState(gallery, client)
-  const outstandingBalance = client
-    ? Math.max(0, Number(client.total_amount) - Number(client.amount_paid))
-    : 0
+  const outstandingBalance = gallery.total_amount !== undefined
+    ? Math.max(0, Number(gallery.total_amount || 0) - Number(gallery.amount_paid || 0))
+    : client
+      ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
+      : 0
 
   switch (state) {
     case 'draft-only':

@@ -1,0 +1,334 @@
+/**
+ * darkroom.css
+ *
+ * Styling for darkroom visual primitives — low-level 3D objects using CSS transforms.
+ * No JavaScript animation, no image assets, no canvas/WebGL.
+ *
+ * Design tokens are inherited from the surrounding context (e.g., client-gallery.css).
+ * This file focuses on geometry, transforms, and animation rules.
+ *
+ * Performance notes:
+ * - All 3D transforms use will-change: transform where appropriate
+ * - Animations use prefers-reduced-motion to disable motion for users who request it
+ * - No shadows, filters, or effects that require expensive composite operations
+ * - Geometry is built from simple divs and pseudo-elements
+ */
+
+/* ==========================================================================
+   DarkroomObject — the low-level 3D container primitive
+   ========================================================================== */
+
+.darkroom-object {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* perspective is set inline via style prop */
+}
+
+.darkroom-object__inner {
+  /* transform-style and transform are set inline */
+  will-change: transform;
+}
+
+/* ==========================================================================
+   UndevelopedRoll — film roll illustration for in-progress state
+   ========================================================================== */
+
+.darkroom-roll {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1100px;
+  padding: 4px 0 14px;
+}
+
+.darkroom-roll__scene {
+  position: relative;
+  width: 168px;
+  height: 74px;
+  transform-style: preserve-3d;
+  animation: darkroom-roll-drift 8s ease-in-out infinite;
+  will-change: transform;
+}
+
+.darkroom-roll__frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 58px;
+  height: 40px;
+  margin: -20px 0 0 -29px;
+  border-radius: 3px;
+  border: 1px solid rgba(199, 203, 210, 0.25);
+  transform-style: preserve-3d;
+  background-image: linear-gradient(155deg, var(--frame-start), var(--frame-end));
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+  will-change: transform;
+}
+
+/* Sprocket perforations along the top and bottom edge (like real film stock) */
+.darkroom-roll__frame::before,
+.darkroom-roll__frame::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background-image: radial-gradient(circle, var(--pg-bg) 1.1px, transparent 1.3px);
+  background-size: 8px 5px;
+  background-repeat: repeat-x;
+}
+
+.darkroom-roll__frame::before {
+  top: 3px;
+}
+
+.darkroom-roll__frame::after {
+  bottom: 3px;
+}
+
+/* Individual frame positions and colors — grey to brass gradient */
+.darkroom-roll__frame--1 {
+  --frame-start: #6b6f76;
+  --frame-end: #83878e;
+  transform: translateZ(-36px) translateX(-56px) rotateZ(-16deg) rotateY(10deg);
+}
+
+.darkroom-roll__frame--2 {
+  --frame-start: #83878e;
+  --frame-end: #97897a;
+  transform: translateZ(-14px) translateX(-19px) rotateZ(-6deg) rotateY(5deg);
+}
+
+.darkroom-roll__frame--3 {
+  --frame-start: #97897a;
+  --frame-end: var(--pg-brass-dim);
+  transform: translateZ(10px) translateX(19px) rotateZ(6deg) rotateY(-5deg);
+}
+
+.darkroom-roll__frame--4 {
+  --frame-start: var(--pg-brass-dim);
+  --frame-end: var(--pg-brass);
+  transform: translateZ(30px) translateX(54px) rotateZ(15deg) rotateY(-9deg);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes darkroom-roll-drift {
+  0%,
+  100% {
+    transform: rotateY(-5deg) rotateX(2deg);
+  }
+  50% {
+    transform: rotateY(5deg) rotateX(-1deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .darkroom-roll__scene {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   FoggedFrame — a single fogged film frame for error/loading states
+   ========================================================================== */
+
+.darkroom-fogged-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 900px;
+  padding: 2px 0 8px;
+}
+
+.darkroom-fogged-frame__glass {
+  position: relative;
+  width: 120px;
+  height: 90px;
+  border-radius: 4px;
+  border: 1px solid rgba(199, 203, 210, 0.15);
+  background: linear-gradient(135deg, #2a2f38 0%, #1e2329 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.08),
+    0 8px 16px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  transform-style: preserve-3d;
+}
+
+.darkroom-fogged-frame__diffusion {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 100% at 50% 40%, rgba(176, 141, 87, 0.12), transparent 70%);
+  animation: darkroom-fog-pulse 4s ease-in-out infinite;
+  will-change: opacity;
+}
+
+@keyframes darkroom-fog-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .darkroom-fogged-frame__diffusion {
+    animation: none;
+    opacity: 0.75;
+  }
+}
+
+/* ==========================================================================
+   EmptySleeve — protective sleeve illustration for empty albums
+   ========================================================================== */
+
+.darkroom-empty-sleeve {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1200px;
+  padding: 8px 0 12px;
+}
+
+.darkroom-empty-sleeve__pouch {
+  position: relative;
+  width: 140px;
+  height: 110px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #1a1e25 0%, #232a33 50%, #1a1e25 100%);
+  border: 1px solid rgba(199, 203, 210, 0.1);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.04),
+    0 6px 12px rgba(0, 0, 0, 0.3);
+  transform-style: preserve-3d;
+}
+
+.darkroom-empty-sleeve__fold {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 70px;
+  height: 14px;
+  margin-left: -35px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+  border-bottom: 1px solid rgba(176, 141, 87, 0.15);
+  border-radius: 2px 2px 0 0;
+}
+
+/* ==========================================================================
+   WaxSeal — decorative seal impression (wax or embossed effect)
+   ========================================================================== */
+
+.darkroom-wax-seal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 800px;
+  /* diameter is set via CSS variable --darkroom-seal-diameter */
+  width: var(--darkroom-seal-diameter, 64px);
+  height: var(--darkroom-seal-diameter, 64px);
+  will-change: transform;
+}
+
+.darkroom-wax-seal__outer,
+.darkroom-wax-seal__middle,
+.darkroom-wax-seal__inner {
+  position: absolute;
+  border-radius: 50%;
+  transform-style: preserve-3d;
+}
+
+.darkroom-wax-seal__outer {
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 35% 35%, rgba(176, 141, 87, 0.8), rgba(176, 141, 87, 0.3));
+  box-shadow:
+    inset -2px -2px 4px rgba(0, 0, 0, 0.4),
+    0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.darkroom-wax-seal__middle {
+  width: 85%;
+  height: 85%;
+  top: 7.5%;
+  left: 7.5%;
+  background: radial-gradient(circle at 40% 40%, rgba(176, 141, 87, 0.6), rgba(176, 141, 87, 0.2));
+  box-shadow: inset -1px -1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.darkroom-wax-seal__inner {
+  width: 60%;
+  height: 60%;
+  top: 20%;
+  left: 20%;
+  background: radial-gradient(circle at 45% 45%, rgba(176, 141, 87, 0.4), rgba(176, 141, 87, 0.1));
+}
+
+/* ==========================================================================
+   ApertureMark — camera aperture blade visualization
+   ========================================================================== */
+
+.darkroom-aperture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1000px;
+  /* diameter and blade count are set via CSS variables */
+  width: var(--darkroom-aperture-diameter, 48px);
+  height: var(--darkroom-aperture-diameter, 48px);
+  position: relative;
+  will-change: transform;
+}
+
+.darkroom-aperture__blade {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  /* blade index is set via CSS variable --darkroom-blade-index */
+  --angle: calc(360deg / var(--darkroom-aperture-blades, 8) * var(--darkroom-blade-index, 0));
+  transform: rotateZ(var(--angle));
+  background: linear-gradient(90deg, rgba(176, 141, 87, 0.4), rgba(176, 141, 87, 0.1), transparent);
+  clip-path: polygon(50% 0%, 100% 0%, 50% 100%);
+  opacity: 0.7;
+}
+
+.darkroom-aperture__blade:nth-child(even) {
+  opacity: 0.5;
+}
+
+/* ==========================================================================
+   Accessibility and reduced motion
+   ========================================================================== */
+
+/* All darkroom objects respect prefers-reduced-motion at the container level */
+@media (prefers-reduced-motion: reduce) {
+  .darkroom-roll__scene,
+  .darkroom-fogged-frame__diffusion {
+    animation: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+  .darkroom-roll__frame {
+    border-color: rgba(199, 203, 210, 0.5);
+  }
+
+  .darkroom-fogged-frame__glass {
+    border-color: rgba(199, 203, 210, 0.3);
+  }
+}
+
+/* Print styles — strip perspective and animation */
+@media print {
+  .darkroom-roll,
+  .darkroom-fogged-frame,
+  .darkroom-empty-sleeve,
+  .darkroom-wax-seal,
+  .darkroom-aperture {
+    perspective: none;
+    animation: none;
+  }
+}

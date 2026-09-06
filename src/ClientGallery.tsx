@@ -4,6 +4,7 @@ import { AuthedImage } from './AuthedImage'
 import { ToastProvider, useToast } from './components/Toast'
 import { SelectionBar } from './components/SelectionBar'
 import { Lightbox } from './components/Lightbox'
+import { FoggedFrame, UndevelopedRoll } from './components/darkroom'
 import type { ProofAlbum, ProofGalleryMeta, ProofPhoto } from './components/proofTypes'
 import { loadSelectionSnapshot, saveSelectionSnapshot } from './storage/indexedDb'
 import { getSyncStatus } from './sync/client'
@@ -15,6 +16,7 @@ import {
 } from './sync/outbox'
 import { createSelectionMutation } from './sync/selection'
 import './client-gallery.css'
+import './components/darkroom/darkroom.css'
 
 // Client-facing gallery for a single roll, reached at /g/:accessToken.
 //
@@ -385,6 +387,7 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
   if (state.status === 'error') {
     return (
       <div className="pg-gallery pg-gallery--error">
+        <FoggedFrame ariaLabel="Gallery failed to load" />
         <p className="pg-status-note pg-status-note--error" role="alert">
           {state.message}
         </p>
@@ -468,8 +471,8 @@ function ClientGalleryInner({ accessToken }: ClientGalleryProps) {
       </header>
 
       {gallery.locked && (
-        <div className="pg-lock-banner" role="note">
-          <LockGlyph />
+        <div className={`pg-lock-banner${gallery.status === 'DRAFT' ? ' pg-lock-banner--draft' : ''}`} role="note">
+          {gallery.status === 'DRAFT' ? <UndevelopedRoll /> : <LockGlyph />}
           <p>
             {gallery.lockedReason ||
               'Previews only for now — full-resolution downloads open once your gallery is marked delivered.'}

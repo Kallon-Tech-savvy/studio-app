@@ -42,7 +42,7 @@
 
 .admin-header h2 {
   margin: 2px 0 0;
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   color: var(--ink);
 }
 
@@ -57,7 +57,7 @@
   font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
 }
 

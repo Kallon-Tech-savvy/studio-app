@@ -48,6 +48,8 @@ function createDefaultGalleryForm(): GalleryFormState {
     description: '',
     is_public: false,
     client_id: '',
+    total_amount: 0,
+    amount_paid: 0,
     downloads_enabled: true,
     selection_enabled: true,
     watermark_enabled: false,

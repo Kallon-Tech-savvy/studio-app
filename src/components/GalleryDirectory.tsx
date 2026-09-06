@@ -52,9 +52,11 @@ export function GalleryDirectory({
           {galleries.map(gallery => {
             const client = clientById.get(gallery.client_id ?? '') ?? null
 
-            const balance = client
-              ? Math.max(0, Number(client.total_amount) - Number(client.amount_paid))
-              : 0
+            const balance = gallery.total_amount !== undefined
+              ? Math.max(0, Number(gallery.total_amount || 0) - Number(gallery.amount_paid || 0))
+              : client
+                ? Math.max(0, Number(client.total_amount) - Number(client.amount_paid))
+                : 0
 
             const accessState = GALLERY_ACCESS_LABELS[getGalleryAccessState(gallery, client)]
             const selected = gallery.id === selectedGalleryId
@@ -122,6 +124,9 @@ export function GalleryDirectory({
                   <span>{accessState}</span>
                   <span>
                     Balance: <strong>NLe {balance.toLocaleString()}</strong>
+                  </span>
+                  <span>
+                    Photos: <strong>{gallery.photo_count ?? 0}</strong>
                   </span>
                 </div>
 

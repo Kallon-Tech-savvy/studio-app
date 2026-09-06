@@ -29,7 +29,10 @@ export type NextActionCode =
   | 'COMPLETE_GALLERY'
 
 export interface GalleryWorkflowContext {
-  gallery: Pick<Gallery, 'status' | 'downloads_enabled' | 'selection_enabled' | 'client_id' | 'access_token'>
+  gallery: Pick<Gallery, 'status' | 'downloads_enabled' | 'selection_enabled' | 'client_id' | 'access_token'> & {
+    total_amount?: number
+    amount_paid?: number
+  }
   client: Pick<Client, 'total_amount' | 'amount_paid'> | null
   photoCount: number
   selectedCount: number
@@ -46,9 +49,11 @@ export interface NextAction {
 
 export function getGalleryWorkflow(context: GalleryWorkflowContext): GalleryWorkflow {
   const { gallery, client, photoCount, selectedCount } = context
-  const outstandingBalance = client
-    ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
-    : 0
+  const outstandingBalance = gallery.total_amount !== undefined
+    ? Math.max(0, Number(gallery.total_amount || 0) - Number(gallery.amount_paid || 0))
+    : client
+      ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
+      : 0
 
   if (photoCount === 0) return 'needs_upload'
   if (gallery.status === 'DRAFT' || gallery.status === 'PROCESSING') return 'needs_curation'
@@ -63,9 +68,11 @@ export function getGalleryWorkflow(context: GalleryWorkflowContext): GalleryWork
 
 export function getNextAction(context: GalleryWorkflowContext): NextAction | null {
   const { gallery, client, photoCount, selectedCount } = context
-  const outstandingBalance = client
-    ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
-    : 0
+  const outstandingBalance = gallery.total_amount !== undefined
+    ? Math.max(0, Number(gallery.total_amount || 0) - Number(gallery.amount_paid || 0))
+    : client
+      ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
+      : 0
 
   if (photoCount === 0) {
     return {

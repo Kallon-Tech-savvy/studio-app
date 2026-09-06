@@ -147,6 +147,8 @@ type GalleryWriteBody = {
   event_date?: string
   client_id?: string | null
   cover_path?: string | null
+  total_amount?: number
+  amount_paid?: number
 }
 
 type ClientWriteBody = {
@@ -198,11 +200,15 @@ app.get('/api/studio/galleries', async (c) => {
 
   const { data, error } = await auth.supabase
     .from('galleries')
-    .select('*, client:clients(id, name, email)')
+    .select('*, client:clients(id, name, email), photos(id)')
     .order('created_at', { ascending: false })
 
   if (error) return c.json({ error: error.message }, 400)
-  return c.json({ galleries: data })
+  const galleries = (data ?? []).map((g: Record<string, unknown>) => ({
+    ...g,
+    photo_count: Array.isArray(g.photos) ? g.photos.length : 0,
+  }))
+  return c.json({ galleries })
 })
 
 app.post('/api/galleries', async (c) => {
@@ -214,6 +220,12 @@ app.post('/api/galleries', async (c) => {
 
   const { data: authedUser } = await auth.supabase.auth.getUser()
   const ownerId = authedUser.user?.id
+
+  const totalAmount = Number(body.total_amount ?? 0)
+  const amountPaid = Number(body.amount_paid ?? 0)
+  if (!Number.isFinite(totalAmount) || totalAmount < 0) return c.json({ error: 'Total amount must be a non-negative number.' }, 400)
+  if (!Number.isFinite(amountPaid) || amountPaid < 0) return c.json({ error: 'Amount paid must be a non-negative number.' }, 400)
+  if (amountPaid > totalAmount) return c.json({ error: 'Amount paid cannot exceed total amount.' }, 400)
 
   const { data, error } = await auth.supabase
     .from('galleries')
@@ -228,6 +240,8 @@ app.post('/api/galleries', async (c) => {
       event_date: body.event_date ? new Date(body.event_date).toISOString() : new Date().toISOString(),
       expiration_date: body.expiration_date ? new Date(body.expiration_date).toISOString() : null,
       client_id: body.client_id || null,
+      total_amount: totalAmount,
+      amount_paid: amountPaid,
       owner_id: ownerId,
     })
     .select()
@@ -252,10 +266,17 @@ app.patch('/api/galleries/:id', async (c) => {
     return c.json({ error: `status must be one of: ${GALLERY_STATUSES.join(', ')}` }, 400)
   }
 
+  if (body.total_amount !== undefined && (!Number.isFinite(Number(body.total_amount)) || Number(body.total_amount) < 0)) {
+    return c.json({ error: 'Total amount must be a non-negative number.' }, 400)
+  }
+  if (body.amount_paid !== undefined && (!Number.isFinite(Number(body.amount_paid)) || Number(body.amount_paid) < 0)) {
+    return c.json({ error: 'Amount paid must be a non-negative number.' }, 400)
+  }
+
   const fields: (keyof GalleryWriteBody)[] = [
     'title', 'description', 'cover_path', 'is_public', 'status',
     'downloads_enabled', 'selection_enabled', 'watermark_enabled',
-    'expiration_date', 'event_date', 'client_id',
+    'expiration_date', 'event_date', 'client_id', 'total_amount', 'amount_paid',
   ]
   const updateData: Partial<GalleryWriteBody> = {}
   for (const field of fields) {
@@ -379,6 +400,27 @@ app.post('/api/galleries/:id/unlock-downloads', async (c) => {
 
   await logActivity(auth.supabase, 'DOWNLOAD_UNLOCKED', `Unlocked downloads for "${data.title}" (${galleryId})`)
   await invalidateGalleryCache(c.env)
+  return c.json({ gallery: data })
+})
+
+app.post('/api/galleries/:id/payments', async (c) => {
+  const auth = await requireAnyPermission(c, ['manageGalleries', 'viewFinances'])
+  if (!auth.ok) return auth.response
+
+  const galleryId = c.req.param('id')
+  const body = await c.req.json<{ amount?: number }>()
+  const amount = Number(body.amount)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return c.json({ error: 'Payment amount must be a positive number.' }, 400)
+  }
+
+  const { data, error } = await auth.supabase.rpc('record_gallery_payment', {
+    p_gallery_id: galleryId,
+    p_amount: amount,
+  })
+  if (error) return c.json({ error: error.message }, 400)
+
+  await logActivity(auth.supabase, 'RECORD_GALLERY_PAYMENT', `Recorded payment of NLe ${amount.toLocaleString()} for gallery "${data.title}" (${galleryId})`)
   return c.json({ gallery: data })
 })
 
@@ -780,9 +822,28 @@ app.get('/api/clients', async (c) => {
   const auth = await requirePermission(c, 'viewFinances')
   if (!auth.ok) return auth.response
 
-  const { data, error } = await auth.supabase.from('clients').select('*').order('created_at', { ascending: false })
+  const { data, error } = await auth.supabase
+    .from('clients')
+    .select('*, galleries:galleries(id, total_amount, amount_paid)')
+    .order('created_at', { ascending: false })
+
   if (error) return c.json({ error: error.message }, 400)
-  return c.json({ clients: data })
+
+  const clients = (data ?? []).map((client: Record<string, unknown>) => {
+    const clientGalleries = (client.galleries as Array<Record<string, unknown>>) ?? []
+    if (clientGalleries.length > 0) {
+      const projectTotal = clientGalleries.reduce((sum: number, g) => sum + Number(g.total_amount ?? 0), 0)
+      const projectPaid = clientGalleries.reduce((sum: number, g) => sum + Number(g.amount_paid ?? 0), 0)
+      return {
+        ...client,
+        total_amount: projectTotal,
+        amount_paid: projectPaid,
+      }
+    }
+    return client
+  })
+
+  return c.json({ clients })
 })
 
 app.post('/api/clients', async (c) => {

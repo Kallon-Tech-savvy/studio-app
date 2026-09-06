@@ -198,7 +198,7 @@ function AdminPanelContent({
             {staff.role}) doesn't have
             gallery-management or
             upload permissions yet.
-            Ask an owner to grant
+            Ask an owner to grant you
             access — you can still
             browse what's here.
           </p>
@@ -238,9 +238,10 @@ function AdminPanelContent({
             handleUnlockDownloads
           }
           photoCounts={
-            data.photos.reduce(
-              (acc, photo) => {
-                acc[photo.gallery_id] = (acc[photo.gallery_id] ?? 0) + 1
+            data.galleries.reduce(
+              (acc, gallery) => {
+                const loadedCount = data.photos.filter(p => p.gallery_id === gallery.id).length
+                acc[gallery.id] = Math.max(gallery.photo_count ?? 0, loadedCount)
                 return acc
               },
               {} as Record<string, number>,

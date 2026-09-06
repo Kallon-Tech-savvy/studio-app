@@ -9,14 +9,16 @@ export interface GalleryHealthItem {
 }
 
 export function getGalleryHealth(
-  gallery: Pick<Gallery, 'status' | 'downloads_enabled' | 'client_id'>,
-  client: Pick<Client, 'total_amount' | 'amount_paid'> | null,
-  photoCount: number,
-  selectedCount: number,
+  gallery: Pick<Gallery, 'status' | 'downloads_enabled' | 'client_id'> & { total_amount?: number; amount_paid?: number },
+  client?: Pick<Client, 'total_amount' | 'amount_paid'> | null,
+  photoCount: number = 0,
+  selectedCount: number = 0,
 ): GalleryHealthItem[] {
-  const outstandingBalance = client
-    ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
-    : 0
+  const outstandingBalance = gallery.total_amount !== undefined
+    ? Math.max(0, Number(gallery.total_amount || 0) - Number(gallery.amount_paid || 0))
+    : client
+      ? Math.max(0, Number(client.total_amount || 0) - Number(client.amount_paid || 0))
+      : 0
 
   return [
     {

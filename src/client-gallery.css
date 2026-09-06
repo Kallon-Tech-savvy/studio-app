@@ -10,23 +10,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,440;9..144,560&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  --pg-bg: #0F2042;
-  --pg-bg-elevated: #163156;
-  --pg-surface: #1B3766;
-  --pg-surface-hover: #22457E;
-  --pg-hairline: rgba(249, 248, 243, 0.15);
-  --pg-hairline-strong: rgba(249, 248, 243, 0.22);
+  --pg-bg: #0a0d12;
+  --pg-bg-elevated: #12161d;
+  --pg-surface: #171c24;
+  --pg-surface-hover: #1f252f;
+  --pg-hairline: #2b323c;
+  --pg-hairline-strong: #3a4350;
 
-  --pg-paper: #F9F8F3;
-  --pg-paper-dim: #EBEAE4;
+  --pg-paper: #ebe7dc;
+  --pg-paper-dim: #a6a399;
 
-  --pg-platinum: #EBEAE4;
-  --pg-platinum-dim: #C6C3BC;
-  --pg-brass: #D33F23;
-  --pg-brass-dim: #A92F1B;
+  --pg-platinum: #c7cbd2;
+  --pg-platinum-dim: #868c96;
+  --pg-brass: #b08d57;
+  --pg-brass-dim: #8a7050;
 
-  --pg-success: #7BBE9F;
-  --pg-danger: #D96A58;
+  --pg-success: #6e9f82;
+  --pg-danger: #b85b4e;
 
   --pg-font-display: 'Fraunces', Georgia, serif;
   --pg-font-ui: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -46,7 +46,7 @@
   background: var(--pg-bg);
   color: var(--pg-paper);
   font-family: var(--pg-font-ui);
-  padding: 0 var(--pg-gutter) calc(160px + env(safe-area-inset-bottom));
+  padding: 0 var(--pg-gutter) 120px;
   max-width: 1400px;
   margin: 0 auto;
   position: relative;
@@ -149,6 +149,120 @@
   color: var(--pg-paper-dim);
 }
 
+/* The draft/still-processing case gets the bigger illustration instead
+   of the small inline glyph, so it reads as a moment worth pausing on
+   rather than a slim inline warning row. */
+.pg-lock-banner--draft {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  padding: 22px 20px 20px;
+}
+
+.pg-lock-banner--draft p {
+  max-width: 42ch;
+  color: var(--pg-paper);
+}
+
+/* ── Undeveloped roll (draft-lock illustration) ───────────────────────
+   Same CSS-3D technique as the admin app's PhotoStack3D (perspective +
+   preserve-3d, no image/engine) but in this app's own palette. Four
+   frames fan out like a loosely unspooled strip, grading from a flat
+   grey (undeveloped) to brass (developed) left to right. */
+.pg-roll-3d {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1100px;
+  padding: 4px 0 14px;
+}
+
+.pg-roll-3d__scene {
+  position: relative;
+  width: 168px;
+  height: 74px;
+  transform-style: preserve-3d;
+  animation: pg-roll-drift 8s ease-in-out infinite;
+}
+
+.pg-roll-3d__frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 58px;
+  height: 40px;
+  margin: -20px 0 0 -29px;
+  border-radius: 3px;
+  border: 1px solid rgba(199, 203, 210, 0.25);
+  transform-style: preserve-3d;
+  background-image: linear-gradient(155deg, var(--frame-start), var(--frame-end));
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* Sprocket perforations along the top and bottom edge, like real film
+   stock — a repeating row of small punched dots on each side. */
+.pg-roll-3d__frame::before,
+.pg-roll-3d__frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background-image: radial-gradient(circle, var(--pg-bg) 1.1px, transparent 1.3px);
+  background-size: 8px 5px;
+  background-repeat: repeat-x;
+}
+
+.pg-roll-3d__frame::before {
+  top: 3px;
+}
+
+.pg-roll-3d__frame::after {
+  bottom: 3px;
+}
+
+.pg-roll-3d__frame--1 {
+  --frame-start: #6b6f76;
+  --frame-end: #83878e;
+  transform: translateZ(-36px) translateX(-56px) rotateZ(-16deg) rotateY(10deg);
+}
+
+.pg-roll-3d__frame--2 {
+  --frame-start: #83878e;
+  --frame-end: #97897a;
+  transform: translateZ(-14px) translateX(-19px) rotateZ(-6deg) rotateY(5deg);
+}
+
+.pg-roll-3d__frame--3 {
+  --frame-start: #97897a;
+  --frame-end: var(--pg-brass-dim);
+  transform: translateZ(10px) translateX(19px) rotateZ(6deg) rotateY(-5deg);
+}
+
+.pg-roll-3d__frame--4 {
+  --frame-start: var(--pg-brass-dim);
+  --frame-end: var(--pg-brass);
+  transform: translateZ(30px) translateX(54px) rotateZ(15deg) rotateY(-9deg);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes pg-roll-drift {
+  0%,
+  100% {
+    transform: rotateY(-5deg) rotateX(2deg);
+  }
+  50% {
+    transform: rotateY(5deg) rotateX(-1deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-roll-3d__scene {
+    animation: none;
+  }
+}
+
 /* ==========================================================================
    Album filter chips
    ========================================================================== */
@@ -168,7 +282,6 @@
   border: 1px solid var(--pg-hairline);
   border-radius: 999px;
   padding: 7px 16px;
-  min-height: 44px;
   cursor: pointer;
   transition: border-color 0.15s var(--pg-ease), color 0.15s var(--pg-ease), background 0.15s var(--pg-ease);
 }
@@ -287,8 +400,6 @@
   right: 8px;
   width: 44px;
   height: 44px;
-  min-width: 44px;
-  min-height: 44px;
   border-radius: 6px;
   border: 1.5px solid rgba(235, 231, 220, 0.55);
   background: rgba(10, 13, 18, 0.5);
@@ -402,25 +513,17 @@
   transform: translate(-50%, 12px);
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 20px;
   background: var(--pg-bg-elevated);
   border: 1px solid var(--pg-hairline-strong);
   border-radius: 10px;
-  padding: 10px 12px 10px 16px;
+  padding: 12px 14px 12px 20px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s var(--pg-ease), transform 0.18s var(--pg-ease);
   z-index: 40;
   max-width: calc(100vw - 32px);
-  backdrop-filter: blur(10px);
-}
-
-.pg-selection-bar-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
 }
 
 .pg-selection-bar--visible {
@@ -435,51 +538,10 @@
   white-space: nowrap;
 }
 
-.pg-selection-bar-status {
-  font-size: 11.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pg-platinum-dim);
-}
-
 .pg-selection-bar-count-number {
   font-family: var(--pg-font-mono);
   color: var(--pg-paper);
   font-size: 14px;
-}
-
-.pg-selection-bar-toggle {
-  white-space: nowrap;
-}
-
-.pg-selection-bar-download {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 120px;
-}
-
-.pg-selection-bar-download-track {
-  flex: 1;
-  min-width: 60px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-  position: relative;
-}
-
-.pg-selection-bar-download-track span {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(90deg, var(--pg-platinum), var(--pg-brass));
-  border-radius: inherit;
-}
-
-.pg-selection-bar-download-label {
-  font-family: var(--pg-font-mono);
-  font-size: 11px;
-  color: var(--pg-paper-dim);
 }
 
 .pg-selection-bar-actions {
@@ -495,24 +557,9 @@
     transform: translateY(12px);
     width: auto;
     justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
   }
   .pg-selection-bar--visible {
     transform: translateY(0);
-  }
-  .pg-selection-bar-main,
-  .pg-selection-bar-toggle,
-  .pg-selection-bar-download,
-  .pg-selection-bar-actions {
-    width: 100%;
-  }
-  .pg-selection-bar-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-  .pg-selection-bar .pg-btn {
-    width: 100%;
   }
 }
 
@@ -562,6 +609,53 @@
 
 .pg-toast--success svg {
   color: var(--pg-success);
+}
+
+/* ── Download seal (wax-seal confirmation glyph) ──────────────────────
+   Sits in the same slot as ToastGlyph's small svg icons, so it inherits
+   the toast's layout — just a richer one-off visual for "your download
+   is complete" instead of a generic checkmark. */
+.pg-download-seal {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #d4a462, var(--pg-brass) 55%, var(--pg-brass-dim) 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.35),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+  animation: pg-seal-press 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.pg-download-seal::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+@keyframes pg-seal-press {
+  0% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.92);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-download-seal {
+    animation: none;
+  }
 }
 
 .pg-toast--error svg {
@@ -670,12 +764,8 @@
   border: none;
   color: var(--pg-paper-dim);
   cursor: pointer;
-  padding: 10px;
-  min-width: 44px;
-  min-height: 44px;
+  padding: 4px;
   display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 4px;
 }
 
@@ -743,10 +833,8 @@
   border: 1px solid var(--pg-hairline);
   color: var(--pg-paper);
   border-radius: 999px;
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -869,6 +957,62 @@
 
 .pg-gallery--loading {
   padding-top: 40px;
+}
+
+.pg-gallery--error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 48px;
+}
+
+/* ── Fogged frame (error-state illustration) ──────────────────────────
+   One tilted frame, static — no drift, unlike the roll. Motion here
+   would read as "still in progress"; the point is the opposite. */
+.pg-fogged-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 900px;
+  padding: 4px 0 12px;
+}
+
+.pg-fogged-frame__frame {
+  position: relative;
+  width: 96px;
+  height: 72px;
+  border-radius: 4px;
+  border: 1px solid rgba(199, 203, 210, 0.18);
+  background: linear-gradient(155deg, #262b33, #181c22);
+  transform: rotateZ(-6deg) rotateX(6deg) rotateY(6deg);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.pg-fogged-frame__frame::before,
+.pg-fogged-frame__frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background-image: radial-gradient(circle, var(--pg-bg) 1.2px, transparent 1.4px);
+  background-size: 9px 6px;
+  background-repeat: repeat-x;
+}
+
+.pg-fogged-frame__frame::before {
+  top: 4px;
+}
+
+.pg-fogged-frame__frame::after {
+  bottom: 4px;
+}
+
+.pg-fogged-frame__fog {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 42% 38%, rgba(199, 203, 210, 0.42), rgba(199, 203, 210, 0.06) 60%, transparent 78%);
 }
 
 .pg-skeleton-grid {

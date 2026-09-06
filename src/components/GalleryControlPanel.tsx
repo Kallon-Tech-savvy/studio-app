@@ -57,6 +57,9 @@ export function GalleryControlPanel({
   const [selectedAlbumId, setSelectedAlbumId] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [linkAction, setLinkAction] = useState<'regenerate' | 'revoke' | 'email' | 'delete' | null>(null)
+  const [recordingPayment, setRecordingPayment] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [submittingPayment, setSubmittingPayment] = useState(false)
 
   // Local copies of gallery fields for the advanced settings form.
   // These are kept in sync with the gallery prop so external refreshes
@@ -118,6 +121,35 @@ export function GalleryControlPanel({
       notify(describeError(error, "Couldn't save those settings — please try again."), 'error')
     } finally {
       setSavingSettings(false)
+    }
+  }
+
+  // ── Project payment handling ──────────────────────────────────
+  async function handleRecordGalleryPayment(event: React.FormEvent) {
+    event.preventDefault()
+    const amount = Number(paymentAmount)
+    if (!amount || amount <= 0) {
+      notify('Please enter a valid positive payment amount.', 'error')
+      return
+    }
+    const curGallery = galleries.find(g => g.id === gallery.id) ?? gallery
+    const curBal = Math.max(0, Number(curGallery.total_amount ?? 0) - Number(curGallery.amount_paid ?? 0))
+    if (amount > curBal && curBal > 0) {
+      notify(`Payment of NLe ${amount.toLocaleString()} exceeds the remaining balance of NLe ${curBal.toLocaleString()}.`, 'error')
+      return
+    }
+    setSubmittingPayment(true)
+    try {
+      await adminApi.galleries.recordPayment(accessToken, gallery.id, amount)
+      notify(`Recorded payment of NLe ${amount.toLocaleString()} for "${gallery.title}".`, 'success')
+      setPaymentAmount('')
+      setRecordingPayment(false)
+      await onGalleryRefresh()
+      await onLogsRefresh()
+    } catch (err) {
+      notify(describeError(err, 'Could not record payment for this gallery.'), 'error')
+    } finally {
+      setSubmittingPayment(false)
     }
   }
 
@@ -286,6 +318,10 @@ export function GalleryControlPanel({
 
   // The current gallery as reflected in optimistic state
   const liveGallery = galleries.find(g => g.id === gallery.id) ?? gallery
+  const liveTotal = Number(liveGallery.total_amount ?? 0)
+  const livePaid = Number(liveGallery.amount_paid ?? 0)
+  const remainingBalance = Math.max(0, liveTotal - livePaid)
+  const paymentStatus = liveTotal === 0 ? 'COMPLIMENTARY' : livePaid >= liveTotal ? 'PAID' : livePaid > 0 ? 'PARTIAL' : 'UNPAID'
 
   return (
     <section className="gallery-workspace">
@@ -345,6 +381,109 @@ export function GalleryControlPanel({
             </p>
           </div>
         )}
+
+        {/* ── Project Financials & Payment ── */}
+        <div className="gallery-workspace__status-row" style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>
+          <div className="payment-summary-box" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontWeight: 600, color: 'var(--ink)' }}>Shoot Booking Payment</span>
+              <span className={`payment-status payment-status--${paymentStatus.toLowerCase()}`}>
+                {paymentStatus}
+              </span>
+            </div>
+            <div className="payment-summary-row">
+              <span>Package Fee:</span>
+              <strong>NLe {liveTotal.toLocaleString()}</strong>
+            </div>
+            <div className="payment-summary-row">
+              <span>Amount Paid:</span>
+              <strong>NLe {livePaid.toLocaleString()}</strong>
+            </div>
+            <div className="payment-summary-row payment-summary-row--highlight">
+              <span>Remaining Balance:</span>
+              <strong>NLe {remainingBalance.toLocaleString()}</strong>
+            </div>
+
+            {canManageGalleries && (
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
+                {!recordingPayment ? (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="admin-button admin-button--secondary admin-button--sm"
+                      onClick={() => setRecordingPayment(true)}
+                    >
+                      Record Payment / Deposit
+                    </button>
+                    {remainingBalance === 0 && liveTotal > 0 && (
+                      <span style={{ color: 'var(--positive, #4ade80)', fontSize: '0.75rem' }}>
+                        ✓ Paid in full — downloads unlocked
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <form onSubmit={handleRecordGalleryPayment} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        step="any"
+                        placeholder="Amount (NLe)"
+                        value={paymentAmount}
+                        onChange={e => setPaymentAmount(e.target.value)}
+                        style={{ padding: '4px 8px', fontSize: '0.8rem', width: '130px' }}
+                        autoFocus
+                      />
+                      <button
+                        type="submit"
+                        className="admin-button admin-button--primary admin-button--sm"
+                        disabled={submittingPayment}
+                      >
+                        {submittingPayment ? 'Saving…' : 'Add'}
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-button admin-button--secondary admin-button--sm"
+                        onClick={() => { setRecordingPayment(false); setPaymentAmount('') }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {remainingBalance > 0 && (
+                      <div className="payment-presets">
+                        {remainingBalance >= 100 && (
+                          <button
+                            type="button"
+                            className="preset-btn"
+                            onClick={() => setPaymentAmount('100')}
+                          >
+                            +100
+                          </button>
+                        )}
+                        {remainingBalance >= 500 && (
+                          <button
+                            type="button"
+                            className="preset-btn"
+                            onClick={() => setPaymentAmount('500')}
+                          >
+                            +500
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="preset-btn"
+                          onClick={() => setPaymentAmount(String(remainingBalance))}
+                        >
+                          Pay in Full ({remainingBalance.toLocaleString()})
+                        </button>
+                      </div>
+                    )}
+                  </form>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* ── Photo dropzone ── */}
         {canUploadPhotos && (
@@ -438,6 +577,35 @@ export function GalleryControlPanel({
               type="date"
               value={editGallery.expiration_date?.substring(0, 10) ?? ''}
               onChange={e => setEditGallery(cur => ({ ...cur, expiration_date: e.target.value || null }))}
+            />
+          </div>
+
+          {/* ── Pricing & Payments ── */}
+          <div className="sheet-drawer__section-label">Pricing & Payments</div>
+
+          <div className="field">
+            <label htmlFor="adv-total-amount">Shoot Package Fee (NLe)</label>
+            <input
+              id="adv-total-amount"
+              type="number"
+              min="0"
+              step="any"
+              value={editGallery.total_amount ?? ''}
+              onChange={e => setEditGallery(cur => ({ ...cur, total_amount: Math.max(0, Number(e.target.value) || 0) }))}
+              placeholder="0"
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="adv-amount-paid">Total Amount Paid (NLe)</label>
+            <input
+              id="adv-amount-paid"
+              type="number"
+              min="0"
+              step="any"
+              value={editGallery.amount_paid ?? ''}
+              onChange={e => setEditGallery(cur => ({ ...cur, amount_paid: Math.max(0, Number(e.target.value) || 0) }))}
+              placeholder="0"
             />
           </div>
 

@@ -418,15 +418,36 @@ export function ClientDirectory({
                   </div>
                 )}
 
-                <div className="client-card__footer">
-                  <span>
-                    Linked shoots: <strong>{galleries.length}</strong>
-                  </span>
-                  <span>
-                    {galleries.length
-                      ? galleries.map(gallery => gallery.title).join(', ')
-                      : 'No linked shoot'}
-                  </span>
+                <div className="client-card__footer" style={{ flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--line)', paddingBottom: '4px' }}>
+                    <span>Booked Shoots ({galleries.length})</span>
+                    <span>{galleries.length > 0 ? 'Project Balances' : ''}</span>
+                  </div>
+                  {galleries.length === 0 ? (
+                    <span style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>No linked shoots yet</span>
+                  ) : (
+                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {galleries.map(g => {
+                        const gTotal = Number(g.total_amount ?? 0)
+                        const gPaid = Number(g.amount_paid ?? 0)
+                        const gBal = Math.max(0, gTotal - gPaid)
+                        return (
+                          <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', width: '100%' }}>
+                            <span>• {g.title} ({g.photo_count ?? 0} photos)</span>
+                            <span>
+                              {gBal === 0 && gTotal > 0 ? (
+                                <span style={{ color: 'var(--positive, #4ade80)' }}>Paid</span>
+                              ) : gBal > 0 ? (
+                                <span style={{ color: 'var(--negative, #f87171)' }}>Due: NLe {gBal.toLocaleString()}</span>
+                              ) : (
+                                <span style={{ color: 'var(--muted)' }}>No fee set</span>
+                              )}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </article>
             )

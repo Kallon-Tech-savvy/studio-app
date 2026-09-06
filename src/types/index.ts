@@ -63,6 +63,9 @@ export type Gallery = {
   watermark_enabled: boolean
   access_token: string
   client_id: string | null
+  total_amount?: number
+  amount_paid?: number
+  photo_count?: number
   event_date: string
   expiration_date: string | null
   created_at: string

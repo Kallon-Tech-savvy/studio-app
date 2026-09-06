@@ -112,7 +112,7 @@ export function LoginForm() {
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Jane Photographer"
+              placeholder="Amara Photographer"
               maxLength={120}
               autoComplete="name"
             />

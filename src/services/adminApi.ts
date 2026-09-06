@@ -62,6 +62,8 @@ export const adminApi = {
     revoke: (token: string, id: string) => request<{ gallery: Gallery }>(`/api/galleries/${id}/revoke`, { accessToken: token, method: 'POST', headers: {} }),
     regenerate: (token: string, id: string) => request<{ gallery: Gallery }>(`/api/galleries/${id}/regenerate`, { accessToken: token, method: 'POST', headers: {} }),
     unlockDownloads: (token: string, id: string) => request<{ gallery: Gallery }>(`/api/galleries/${id}/unlock-downloads`, { accessToken: token, method: 'POST', headers: {} }),
+    recordPayment: (token: string, id: string, amount: number) =>
+      request<{ gallery: Gallery }>(`/api/galleries/${id}/payments`, { accessToken: token, method: 'POST', body: JSON.stringify({ amount }) }),
     sendEmail: (token: string, id: string) => request<{ message?: string }>(`/api/galleries/${id}/send-email`, { accessToken: token, method: 'POST', headers: {} }),
     albums: {
       list: (token: string, galleryId: string) => request<{ albums: Album[] }>(`/api/galleries/${galleryId}/albums`, { accessToken: token }),

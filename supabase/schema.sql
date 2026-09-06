@@ -498,6 +498,8 @@ alter table public.galleries add column if not exists watermark_enabled boolean 
 alter table public.galleries add column if not exists event_date timestamptz not null default now();
 alter table public.galleries add column if not exists expiration_date timestamptz;
 alter table public.galleries add column if not exists client_id uuid references public.clients(id) on delete set null;
+alter table public.galleries add column if not exists total_amount numeric not null default 0;
+alter table public.galleries add column if not exists amount_paid numeric not null default 0;
 
 alter table public.galleries enable row level security;
 
@@ -883,8 +885,8 @@ as $$
     g.event_date,
     g.expiration_date,
     g.client_id,
-    coalesce(c.total_amount, 0) as total_amount,
-    coalesce(c.amount_paid, 0) as amount_paid,
+    coalesce(g.total_amount, 0) as total_amount,
+    coalesce(g.amount_paid, 0) as amount_paid,
     c.name as client_name
   from public.galleries g
   left join public.clients c on c.id = g.client_id
@@ -1059,6 +1061,39 @@ $$;
 
 revoke all on function public.record_client_payment(uuid, numeric) from public, anon, authenticated;
 grant execute on function public.record_client_payment(uuid, numeric) to authenticated;
+
+
+create or replace function public.record_gallery_payment(p_gallery_id uuid, p_amount numeric)
+returns public.galleries
+language plpgsql
+set search_path = public
+as $$
+declare
+  result public.galleries;
+begin
+  if p_amount <= 0 then
+    raise exception 'Payment amount must be positive.';
+  end if;
+
+  update public.galleries
+  set amount_paid = amount_paid + p_amount
+  where id = p_gallery_id
+  returning * into result;
+
+  if result.id is null then
+    raise exception 'Gallery not found.';
+  end if;
+
+  if result.amount_paid > result.total_amount then
+    raise exception 'Payment would exceed the total amount owed.';
+  end if;
+
+  return result;
+end;
+$$;
+
+revoke all on function public.record_gallery_payment(uuid, numeric) from public, anon, authenticated;
+grant execute on function public.record_gallery_payment(uuid, numeric) to authenticated;
 
 
 -- security definer here is deliberate: studio_staff's only write policy

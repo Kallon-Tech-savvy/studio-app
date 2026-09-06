@@ -11,6 +11,8 @@ export interface GalleryFormState {
   description: string
   is_public: boolean
   client_id: string
+  total_amount: number
+  amount_paid: number
   downloads_enabled: boolean
   selection_enabled: boolean
   watermark_enabled: boolean
@@ -135,6 +137,44 @@ export function GalleryCreateForm({
                   event.target.value,
               })
             }
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="gallery-total-amount">
+            Shoot Package Fee (NLe)
+          </label>
+          <input
+            id="gallery-total-amount"
+            type="number"
+            min="0"
+            step="any"
+            value={form.total_amount || ''}
+            onChange={event =>
+              onChange({
+                total_amount: Math.max(0, Number(event.target.value) || 0),
+              })
+            }
+            placeholder="e.g. 1500"
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="gallery-amount-paid">
+            Deposit / Amount Paid (NLe)
+          </label>
+          <input
+            id="gallery-amount-paid"
+            type="number"
+            min="0"
+            step="any"
+            value={form.amount_paid || ''}
+            onChange={event =>
+              onChange({
+                amount_paid: Math.max(0, Number(event.target.value) || 0),
+              })
+            }
+            placeholder="0 if unpaid"
           />
         </div>
 

@@ -28,7 +28,7 @@ export function CommandCenter({ galleries, clients, logs, photoCounts = {}, sele
     <div className="admin-view">
       <div className="section-headline">
         <div>
-          <h3 className="section-heading">Studio Command Center</h3>
+          <h3 className="section-heading">Studio in Session</h3>
           <p className="section-sub">What needs attention right now, what is in progress, and what just happened.</p>
         </div>
       </div>
