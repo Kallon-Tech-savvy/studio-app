@@ -1,6 +1,6 @@
 -- ================================================================
--- PROOF STUDIO PLATFORM — PHASE 1 MULTI-TENANT & SECURITY HARDENED MIGRATION
--- Safe to execute against live Supabase environments.
+-- PROOF STUDIO PLATFORM — AUTHORITATIVE MULTI-TENANT & SECURITY SCHEMA
+-- Single source of truth for database tables, RLS policies, and RPCs.
 -- ================================================================
 
 create extension if not exists pgcrypto;
@@ -18,11 +18,10 @@ create table if not exists public.heartbeat (
 insert into public.heartbeat default values on conflict do nothing;
 
 alter table public.heartbeat enable row level security;
-
 revoke all on public.heartbeat from anon, authenticated;
 
 -- ================================================================
--- 2. STUDIOS (TENANT REGISTRY - PHASE 1 SCAFFOLDING)
+-- 2. STUDIOS (TENANT REGISTRY)
 -- ================================================================
 
 create table if not exists public.studios (
@@ -40,7 +39,7 @@ create table if not exists public.studios (
 
 alter table public.studios enable row level security;
 
--- Seed default tenant for existing single-studio data
+-- Seed default tenant for single-studio backwards compatibility
 insert into public.studios (id, name, slug)
 values ('00000000-0000-0000-0000-000000000001', 'MJ Photo Studio', 'mj-photo-studio')
 on conflict (slug) do nothing;
@@ -51,11 +50,11 @@ on conflict (slug) do nothing;
 
 create table if not exists public.studio_staff (
   id uuid primary key default gen_random_uuid(),
-  studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
-  user_id uuid not null unique references auth.users(id) on delete cascade,
-  email text not null unique,
+  studio_id uuid not null references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
+  user_id uuid not null references auth.users(id) on delete cascade,
+  email text not null,
   full_name text not null default '',
-  role text not null default 'assistant' check (role in ('owner', 'admin', 'photographer', 'assistant', 'client')),
+  role text not null default 'assistant' check (role in ('owner', 'admin', 'photographer', 'assistant')),
   permissions jsonb not null default '{
     "manageGalleries": false,
     "uploadPhotos": false,
@@ -67,7 +66,7 @@ create table if not exists public.studio_staff (
   current_streak integer not null default 0,
   galleries_published integer not null default 0,
   photos_uploaded integer not null default 0,
-  last_activity_date timestamptz,
+  last_activity_date date,
   avatar_url text,
   bio text,
   phone text,
@@ -76,46 +75,17 @@ create table if not exists public.studio_staff (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   last_login_at timestamptz,
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  constraint studio_staff_user_studio_unique unique (user_id, studio_id)
 );
-
--- Safely add missing columns to live databases
-alter table public.studio_staff add column if not exists studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001';
-alter table public.studio_staff add column if not exists experience_points integer not null default 0;
-alter table public.studio_staff add column if not exists current_streak integer not null default 0;
-alter table public.studio_staff add column if not exists galleries_published integer not null default 0;
-alter table public.studio_staff add column if not exists photos_uploaded integer not null default 0;
-alter table public.studio_staff add column if not exists last_activity_date timestamptz;
-alter table public.studio_staff add column if not exists avatar_url text;
-alter table public.studio_staff add column if not exists bio text;
-alter table public.studio_staff add column if not exists phone text;
-alter table public.studio_staff add column if not exists email_notifications boolean not null default true;
-alter table public.studio_staff add column if not exists dark_mode boolean not null default true;
-alter table public.studio_staff add column if not exists last_login_at timestamptz;
-alter table public.studio_staff add column if not exists deleted_at timestamptz;
-
--- Backfill studio_id
-update public.studio_staff set studio_id = '00000000-0000-0000-0000-000000000001' where studio_id is null;
 
 alter table public.studio_staff enable row level security;
 
 -- ================================================================
--- 4. STAFF AUTHORIZATION HELPERS (SECURITY DEFINER)
+-- 4. TENANT-AWARE AUTHORIZATION HELPERS (SECURITY DEFINER)
 -- ================================================================
 
-create or replace function public.is_bootstrap_owner(candidate_email text)
-returns boolean
-language sql
-immutable
-security definer
-set search_path = public
-as $$
-  select lower(trim(candidate_email)) = 'alhajicmkallon01@gmail.com';
-$$;
-
-revoke all on function public.is_bootstrap_owner(text) from public, anon, authenticated;
-
-create or replace function public.is_studio_owner()
+create or replace function public.is_studio_owner(p_studio_id uuid default '00000000-0000-0000-0000-000000000001')
 returns boolean
 language sql
 stable
@@ -126,13 +96,17 @@ as $$
     select 1
     from public.studio_staff ss
     where ss.user_id = auth.uid()
+      and ss.studio_id = p_studio_id
       and ss.role = 'owner'
       and ss.is_active = true
       and ss.deleted_at is null
   );
 $$;
 
-create or replace function public.has_staff_permission(permission_name text)
+create or replace function public.has_staff_permission(
+  permission_name text,
+  p_studio_id uuid default '00000000-0000-0000-0000-000000000001'
+)
 returns boolean
 language sql
 stable
@@ -140,21 +114,34 @@ security definer
 set search_path = public
 as $$
   select
-    public.is_studio_owner()
+    public.is_studio_owner(p_studio_id)
     or exists (
       select 1
       from public.studio_staff ss
       where ss.user_id = auth.uid()
+        and ss.studio_id = p_studio_id
         and ss.is_active = true
         and ss.deleted_at is null
         and coalesce((ss.permissions ->> permission_name)::boolean, false)
     );
 $$;
 
-revoke all on function public.is_studio_owner() from public, anon, authenticated;
-revoke all on function public.has_staff_permission(text) from public, anon, authenticated;
-grant execute on function public.is_studio_owner() to authenticated;
-grant execute on function public.has_staff_permission(text) to authenticated;
+revoke all on function public.is_studio_owner(uuid) from public, anon, authenticated;
+revoke all on function public.has_staff_permission(text, uuid) from public, anon, authenticated;
+grant execute on function public.is_studio_owner(uuid) to authenticated;
+grant execute on function public.has_staff_permission(text, uuid) to authenticated;
+
+-- Staff Profile RLS Policies
+drop policy if exists "staff can read their own profile" on public.studio_staff;
+create policy "staff can read their own profile"
+on public.studio_staff for select to authenticated
+using (auth.uid() = user_id or public.is_studio_owner(studio_id));
+
+drop policy if exists "owners can manage staff" on public.studio_staff;
+create policy "owners can manage staff"
+on public.studio_staff for all to authenticated
+using (public.is_studio_owner(studio_id))
+with check (public.is_studio_owner(studio_id));
 
 -- ================================================================
 -- 5. CLIENTS
@@ -162,7 +149,7 @@ grant execute on function public.has_staff_permission(text) to authenticated;
 
 create table if not exists public.clients (
   id uuid primary key default gen_random_uuid(),
-  studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
+  studio_id uuid not null references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
   name text not null,
   email text,
   phone text,
@@ -183,28 +170,13 @@ create table if not exists public.clients (
   deleted_at timestamptz
 );
 
--- Safely add missing columns to live databases
-alter table public.clients add column if not exists studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001';
-alter table public.clients add column if not exists address text;
-alter table public.clients add column if not exists city text;
-alter table public.clients add column if not exists state text;
-alter table public.clients add column if not exists zip text;
-alter table public.clients add column if not exists country text;
-alter table public.clients add column if not exists tax_rate numeric(5, 2) not null default 0;
-alter table public.clients add column if not exists is_active boolean not null default true;
-alter table public.clients add column if not exists custom_fields jsonb;
-alter table public.clients add column if not exists tags text[];
-alter table public.clients add column if not exists deleted_at timestamptz;
-
-update public.clients set studio_id = '00000000-0000-0000-0000-000000000001' where studio_id is null;
-
 alter table public.clients enable row level security;
 
 drop policy if exists "finance staff can manage clients" on public.clients;
 create policy "finance staff can manage clients"
 on public.clients for all to authenticated
-using (public.is_studio_owner() or public.has_staff_permission('viewFinances'))
-with check (public.is_studio_owner() or public.has_staff_permission('viewFinances'));
+using (public.has_staff_permission('viewFinances', studio_id))
+with check (public.has_staff_permission('viewFinances', studio_id));
 
 -- ================================================================
 -- 6. ACTIVITY LOG
@@ -212,7 +184,7 @@ with check (public.is_studio_owner() or public.has_staff_permission('viewFinance
 
 create table if not exists public.activity_log (
   id uuid primary key default gen_random_uuid(),
-  studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
+  studio_id uuid not null references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
   user_id uuid references auth.users(id) on delete set null,
   action text not null,
   entity_type text,
@@ -221,43 +193,36 @@ create table if not exists public.activity_log (
   created_at timestamptz not null default now()
 );
 
-alter table public.activity_log add column if not exists studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001';
-alter table public.activity_log add column if not exists user_id uuid references auth.users(id) on delete set null;
-alter table public.activity_log add column if not exists entity_type text;
-alter table public.activity_log add column if not exists entity_id uuid;
-
-update public.activity_log set studio_id = '00000000-0000-0000-0000-000000000001' where studio_id is null;
-
 alter table public.activity_log enable row level security;
 
 drop policy if exists "staff can read activity_log" on public.activity_log;
 create policy "staff can read activity_log"
 on public.activity_log for select to authenticated
-using (public.is_studio_owner() or public.has_staff_permission('manageStaff'));
+using (public.has_staff_permission('manageStaff', studio_id));
 
 drop policy if exists "staff can append activity_log" on public.activity_log;
 create policy "staff can append activity_log"
 on public.activity_log for insert to authenticated
 with check (
-  public.is_studio_owner()
-  or public.has_staff_permission('manageStaff')
-  or public.has_staff_permission('manageGalleries')
-  or public.has_staff_permission('uploadPhotos')
-  or public.has_staff_permission('viewFinances')
+  public.has_staff_permission('manageStaff', studio_id)
+  or public.has_staff_permission('manageGalleries', studio_id)
+  or public.has_staff_permission('uploadPhotos', studio_id)
+  or public.has_staff_permission('viewFinances', studio_id)
 );
 
 -- ================================================================
--- 7. GALLERIES, ALBUMS & CURATION LISTS
+-- 7. GALLERIES & ALBUMS
 -- ================================================================
 
 create table if not exists public.galleries (
   id uuid primary key default gen_random_uuid(),
-  studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
+  studio_id uuid not null references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
   title text not null,
   description text,
   cover_path text,
   type text not null default 'proofing' check (type in ('proofing', 'delivery')),
   status text not null default 'DRAFT' check (status in ('DRAFT', 'PROCESSING', 'READY', 'PUBLISHED', 'DISABLED', 'ARCHIVED')),
+  review_status text not null default 'not_started' check (review_status in ('not_started', 'in_progress', 'submitted', 'revisions_requested', 'finalized')),
   pin_code text,
   downloads_enabled boolean not null default true,
   selection_enabled boolean not null default true,
@@ -289,34 +254,13 @@ create table if not exists public.galleries (
   updated_at timestamptz not null default now()
 );
 
--- Safely add missing columns to live databases
-alter table public.galleries add column if not exists studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001';
-alter table public.galleries add column if not exists type text not null default 'proofing';
-alter table public.galleries add column if not exists pin_code text;
-alter table public.galleries add column if not exists share_enabled boolean not null default true;
-alter table public.galleries add column if not exists password_protected boolean not null default false;
-alter table public.galleries add column if not exists password_hash text;
-alter table public.galleries add column if not exists selection_limit integer;
-alter table public.galleries add column if not exists extra_photo_price numeric default 0;
-alter table public.galleries add column if not exists allowed_download_sizes jsonb default '["web", "full"]'::jsonb;
-alter table public.galleries add column if not exists tax_rate numeric(5, 2) not null default 0;
-alter table public.galleries add column if not exists max_downloads integer default 0;
-alter table public.galleries add column if not exists max_selections integer default 0;
-alter table public.galleries add column if not exists allow_comments boolean not null default false;
-alter table public.galleries add column if not exists allow_ratings boolean not null default false;
-alter table public.galleries add column if not exists view_count integer not null default 0;
-alter table public.galleries add column if not exists published_at timestamptz;
-alter table public.galleries add column if not exists deleted_at timestamptz;
-
-update public.galleries set studio_id = '00000000-0000-0000-0000-000000000001' where studio_id is null;
-
 alter table public.galleries enable row level security;
 
 drop policy if exists "staff can manage galleries" on public.galleries;
 create policy "staff can manage galleries"
 on public.galleries for all to authenticated
-using (auth.uid() = owner_id or public.is_studio_owner() or public.has_staff_permission('manageGalleries'))
-with check (auth.uid() = owner_id or public.is_studio_owner() or public.has_staff_permission('manageGalleries'));
+using (auth.uid() = owner_id or public.has_staff_permission('manageGalleries', studio_id))
+with check (auth.uid() = owner_id or public.has_staff_permission('manageGalleries', studio_id));
 
 create table if not exists public.albums (
   id uuid primary key default gen_random_uuid(),
@@ -331,9 +275,6 @@ create table if not exists public.albums (
   updated_at timestamptz not null default now()
 );
 
-alter table public.albums add column if not exists photo_count integer not null default 0;
-alter table public.albums add column if not exists total_size bigint not null default 0;
-
 alter table public.albums enable row level security;
 
 drop policy if exists "staff can manage albums" on public.albums;
@@ -343,32 +284,9 @@ using (
   exists (
     select 1 from public.galleries g
     where g.id = albums.gallery_id
-      and (g.owner_id = auth.uid() or public.is_studio_owner() or public.has_staff_permission('manageGalleries'))
+      and (g.owner_id = auth.uid() or public.has_staff_permission('manageGalleries', g.studio_id))
   )
 );
-
-create table if not exists public.curation_lists (
-  id uuid primary key default gen_random_uuid(),
-  gallery_id uuid not null references public.galleries(id) on delete cascade,
-  name text not null default 'Favorites',
-  selection_limit integer,
-  created_at timestamptz not null default now()
-);
-
-alter table public.curation_lists enable row level security;
-
-create table if not exists public.curation_items (
-  id uuid primary key default gen_random_uuid(),
-  list_id uuid not null references public.curation_lists(id) on delete cascade,
-  photo_id uuid not null,
-  note text,
-  approved boolean,
-  approved_at timestamptz,
-  created_at timestamptz not null default now(),
-  constraint curation_items_list_photo_unique unique (list_id, photo_id)
-);
-
-alter table public.curation_items enable row level security;
 
 -- ================================================================
 -- 8. PHOTOS
@@ -376,12 +294,12 @@ alter table public.curation_items enable row level security;
 
 create table if not exists public.photos (
   id uuid primary key default gen_random_uuid(),
-  studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
+  studio_id uuid not null references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001',
   gallery_id uuid not null references public.galleries(id) on delete cascade,
   album_id uuid references public.albums(id) on delete set null,
-  r2_key text not null,
-  preview_r2_key text,
-  thumbnail_r2_key text,
+  r2_key text not null unique,
+  preview_r2_key text unique,
+  thumbnail_r2_key text unique,
   filename text,
   sort_order integer not null default 0,
   size bigint,
@@ -397,18 +315,6 @@ create table if not exists public.photos (
   updated_at timestamptz not null default now()
 );
 
-alter table public.photos add column if not exists studio_id uuid references public.studios(id) on delete cascade default '00000000-0000-0000-0000-000000000001';
-alter table public.photos add column if not exists thumbnail_r2_key text;
-alter table public.photos add column if not exists filename text;
-alter table public.photos add column if not exists width integer;
-alter table public.photos add column if not exists height integer;
-alter table public.photos add column if not exists revised_at timestamptz;
-alter table public.photos add column if not exists is_marked boolean not null default false;
-alter table public.photos add column if not exists download_count integer not null default 0;
-alter table public.photos add column if not exists view_count integer not null default 0;
-
-update public.photos set studio_id = '00000000-0000-0000-0000-000000000001' where studio_id is null;
-
 alter table public.photos enable row level security;
 
 drop policy if exists "staff can manage photos" on public.photos;
@@ -418,12 +324,42 @@ using (
   exists (
     select 1 from public.galleries g
     where g.id = photos.gallery_id
-      and (g.owner_id = auth.uid() or public.is_studio_owner() or public.has_staff_permission('manageGalleries') or public.has_staff_permission('uploadPhotos'))
+      and (g.owner_id = auth.uid() or public.has_staff_permission('manageGalleries', g.studio_id) or public.has_staff_permission('uploadPhotos', g.studio_id))
   )
 );
 
 -- ================================================================
--- 9. TOKEN-GATED CLIENT ACCESS RPCs (SECURITY DEFINER)
+-- 9. CLIENT SELECTIONS (Marked favorite proofs & retouching notes)
+-- ================================================================
+
+create table if not exists public.selections (
+  id uuid primary key default gen_random_uuid(),
+  gallery_id uuid not null references public.galleries(id) on delete cascade,
+  photo_id uuid not null references public.photos(id) on delete cascade,
+  selected_by_client boolean not null default true,
+  approved boolean,
+  approved_at timestamptz,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint selections_gallery_photo_unique unique (gallery_id, photo_id)
+);
+
+alter table public.selections enable row level security;
+
+drop policy if exists "staff can manage selections" on public.selections;
+create policy "staff can manage selections"
+on public.selections for all to authenticated
+using (
+  exists (
+    select 1 from public.galleries g
+    where g.id = selections.gallery_id
+      and (g.owner_id = auth.uid() or public.has_staff_permission('manageGalleries', g.studio_id))
+  )
+);
+
+-- ================================================================
+-- 10. TOKEN-GATED CLIENT ACCESS RPCs (SECURITY DEFINER)
 -- ================================================================
 
 create or replace function public.gallery_by_token(token text)
@@ -435,6 +371,7 @@ returns table (
   cover_path text,
   type text,
   status text,
+  review_status text,
   downloads_enabled boolean,
   selection_enabled boolean,
   watermark_enabled boolean,
@@ -466,6 +403,7 @@ as $$
     g.cover_path,
     g.type,
     g.status,
+    g.review_status,
     g.downloads_enabled,
     g.selection_enabled,
     g.watermark_enabled,
@@ -496,7 +434,7 @@ revoke all on function public.gallery_by_token(text) from public, anon, authenti
 grant execute on function public.gallery_by_token(text) to anon, authenticated;
 
 -- ================================================================
--- 10. ATOMIC PAYMENT MUTATIONS (SECURITY DEFINER)
+-- 11. ATOMIC PAYMENT MUTATIONS (SECURITY DEFINER)
 -- ================================================================
 
 create or replace function public.record_client_payment(p_client_id uuid, p_amount numeric)
@@ -506,9 +444,11 @@ security definer
 set search_path = public
 as $$
 declare
+  v_studio_id uuid;
   result public.clients;
 begin
-  if not (public.is_studio_owner() or public.has_staff_permission('viewFinances')) then
+  select studio_id into v_studio_id from public.clients where id = p_client_id;
+  if not public.has_staff_permission('viewFinances', v_studio_id) then
     raise exception 'Permission denied to record payments.';
   end if;
 
@@ -533,9 +473,11 @@ security definer
 set search_path = public
 as $$
 declare
+  v_studio_id uuid;
   result public.galleries;
 begin
-  if not (public.is_studio_owner() or public.has_staff_permission('viewFinances') or public.has_staff_permission('manageGalleries')) then
+  select studio_id into v_studio_id from public.galleries where id = p_gallery_id;
+  if not (public.has_staff_permission('viewFinances', v_studio_id) or public.has_staff_permission('manageGalleries', v_studio_id)) then
     raise exception 'Permission denied to record payments.';
   end if;
 
@@ -559,6 +501,51 @@ grant execute on function public.record_client_payment(uuid, numeric) to authent
 grant execute on function public.record_gallery_payment(uuid, numeric) to authenticated;
 
 -- ================================================================
+-- 12. AUTOMATIC STAFF PROFILE CREATION TRIGGER
+-- ================================================================
+
+create or replace function public.get_or_create_staff_profile()
+returns setof public.studio_staff
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_email text;
+  v_role text := 'assistant';
+  v_permissions jsonb := '{
+    "manageGalleries": false,
+    "uploadPhotos": false,
+    "manageStaff": false,
+    "viewFinances": false
+  }'::jsonb;
+begin
+  select lower(email) into v_user_email from auth.users where id = auth.uid();
+  if v_user_email is null then
+    return;
+  end if;
+
+  insert into public.studio_staff (
+    user_id, email, full_name, role, permissions, is_active, last_login_at
+  ) values (
+    auth.uid(), v_user_email,
+    coalesce(split_part(v_user_email, '@', 1), 'Staff'),
+    v_role, v_permissions, true, now()
+  )
+  on conflict (user_id, studio_id) do update set
+    email = excluded.email,
+    is_active = true,
+    updated_at = now(),
+    last_login_at = now();
+
+  return query select * from public.studio_staff where user_id = auth.uid();
+end;
+$$;
+
+revoke all on function public.get_or_create_staff_profile() from public, anon, authenticated;
+grant execute on function public.get_or_create_staff_profile() to authenticated;
+
+-- ================================================================
 -- INDEXES FOR MULTI-TENANT QUERY OPTIMIZATION
 -- ================================================================
 
@@ -569,5 +556,5 @@ create index if not exists idx_photos_studio_id on public.photos(studio_id);
 create index if not exists idx_activity_log_studio_id on public.activity_log(studio_id);
 
 -- ================================================================
--- MIGRATION COMPLETE
+-- COMPLETE MIGRATION SCRIPT END
 -- ================================================================
