@@ -1,6 +1,33 @@
 -- ================================================================
 -- PROOF STUDIO PLATFORM — PHASE 1 MULTI-TENANT & SECURITY HARDENED MIGRATION
 -- Safe to execute against live Supabase environments.
+--
+-- This is now the single canonical schema file — schema-improved.sql
+-- has been retired; its tenant-parameterization approach for the
+-- staff-authorization helpers was folded into section 4 below instead
+-- of living as a second, drifting copy of the schema.
+--
+-- RECONCILIATION GAP — read before assuming this file is complete:
+-- worker/index.ts and worker/lib/supabase.ts call several RPCs that
+-- are NOT defined anywhere in this file, which means they exist only
+-- in the live Supabase project and were never committed here:
+--   get_or_create_staff_profile()   (worker/lib/supabase.ts)
+--   public_galleries()              (GET /api/galleries)
+--   photos_by_gallery_token(token)  (GET /api/g/:token/photos)
+--   albums_by_gallery_token(token)  (GET /api/g/:token/albums)
+--   photo_r2_key_by_token(...)      (GET /api/g/:token/photos/:photoId)
+--   photo_preview_r2_key_by_token(...) (same route, preview path)
+--   award_staff_xp(...)             (gamification, referenced as
+--                                     "schema.sql section 10" in a
+--                                     comment that no longer matches
+--                                     this file's section numbering)
+--   increment_galleries_published(...)
+-- These are SECURITY DEFINER functions touching auth/RLS-sensitive
+-- logic, so this migration does not attempt to reconstruct them from
+-- guesswork. Pull their real definitions from the live project
+-- (Supabase Studio → Database → Functions → "Show definition", or
+-- `supabase db dump --schema public`) and append them here so this
+-- file actually matches what's running.
 -- ================================================================
 
 create extension if not exists pgcrypto;
@@ -44,6 +71,9 @@ alter table public.studios enable row level security;
 insert into public.studios (id, name, slug)
 values ('00000000-0000-0000-0000-000000000001', 'MJ Photo Studio', 'mj-photo-studio')
 on conflict (slug) do nothing;
+
+-- (RLS policy for studios is defined at the end of section 4, below —
+-- it needs the studio_staff table to exist first.)
 
 -- ================================================================
 -- 3. STUDIO STAFF
@@ -98,6 +128,9 @@ alter table public.studio_staff add column if not exists deleted_at timestamptz;
 update public.studio_staff set studio_id = '00000000-0000-0000-0000-000000000001' where studio_id is null;
 
 alter table public.studio_staff enable row level security;
+
+-- (RLS policies for studio_staff are defined at the end of section 4,
+-- below — they need is_studio_owner(uuid) to exist first.)
 
 -- ================================================================
 -- 4. STAFF AUTHORIZATION HELPERS (SECURITY DEFINER)
@@ -156,6 +189,94 @@ revoke all on function public.has_staff_permission(text) from public, anon, auth
 grant execute on function public.is_studio_owner() to authenticated;
 grant execute on function public.has_staff_permission(text) to authenticated;
 
+-- Tenant-aware overloads (distinct arity, not a default parameter on
+-- the functions above — a default would make e.g. has_staff_permission
+-- callable with exactly one argument two different ways, which Postgres
+-- rejects as an ambiguous call at every existing 1-arg call site). The
+-- zero/one-arg forms above are untouched, so anything already calling
+-- them — including the phantom RPCs noted at the top of this file —
+-- keeps working unchanged. Every policy below that touches a specific
+-- studio's row calls these scoped versions instead, so an owner or
+-- staff member of one studio can no longer satisfy a check against
+-- another studio's data purely by holding the 'owner' role somewhere.
+create or replace function public.is_studio_owner(p_studio_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.studio_staff ss
+    where ss.user_id = auth.uid()
+      and ss.role = 'owner'
+      and ss.is_active = true
+      and ss.deleted_at is null
+      and ss.studio_id = p_studio_id
+  );
+$$;
+
+create or replace function public.has_staff_permission(permission_name text, p_studio_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.is_studio_owner(p_studio_id)
+    or exists (
+      select 1
+      from public.studio_staff ss
+      where ss.user_id = auth.uid()
+        and ss.is_active = true
+        and ss.deleted_at is null
+        and ss.studio_id = p_studio_id
+        and coalesce((ss.permissions ->> permission_name)::boolean, false)
+    );
+$$;
+
+revoke all on function public.is_studio_owner(uuid) from public, anon, authenticated;
+revoke all on function public.has_staff_permission(text, uuid) from public, anon, authenticated;
+grant execute on function public.is_studio_owner(uuid) to authenticated;
+grant execute on function public.has_staff_permission(text, uuid) to authenticated;
+
+-- studio_staff was RLS-enabled with no committed policy at all. The
+-- two policies below were reverse-engineered from comments already in
+-- worker/index.ts describing behavior the live database evidently
+-- already enforces ("RLS on studio_staff only lets a non-owner read
+-- their own row"; "owners can manage all staff" / "the only RLS write
+-- policy on studio_staff is owner-only") — named to match.
+drop policy if exists "staff can view their own row" on public.studio_staff;
+create policy "staff can view their own row"
+on public.studio_staff for select to authenticated
+using (user_id = auth.uid() or public.is_studio_owner(studio_staff.studio_id));
+
+drop policy if exists "owners can manage all staff" on public.studio_staff;
+create policy "owners can manage all staff"
+on public.studio_staff for all to authenticated
+using (public.is_studio_owner(studio_staff.studio_id))
+with check (public.is_studio_owner(studio_staff.studio_id));
+
+-- Nothing in the app queries `studios` directly today (gallery_by_token
+-- reads it via a SECURITY DEFINER RPC, which bypasses RLS), but it was
+-- RLS-enabled with zero policies, so any future direct read would
+-- silently return no rows. This scopes read access to a staff member's
+-- own studio ahead of that need.
+drop policy if exists "staff can view their own studio" on public.studios;
+create policy "staff can view their own studio"
+on public.studios for select to authenticated
+using (
+  exists (
+    select 1 from public.studio_staff ss
+    where ss.studio_id = studios.id
+      and ss.user_id = auth.uid()
+      and ss.is_active = true
+      and ss.deleted_at is null
+  )
+);
+
 -- ================================================================
 -- 5. CLIENTS
 -- ================================================================
@@ -203,8 +324,8 @@ alter table public.clients enable row level security;
 drop policy if exists "finance staff can manage clients" on public.clients;
 create policy "finance staff can manage clients"
 on public.clients for all to authenticated
-using (public.is_studio_owner() or public.has_staff_permission('viewFinances'))
-with check (public.is_studio_owner() or public.has_staff_permission('viewFinances'));
+using (public.is_studio_owner(clients.studio_id) or public.has_staff_permission('viewFinances', clients.studio_id))
+with check (public.is_studio_owner(clients.studio_id) or public.has_staff_permission('viewFinances', clients.studio_id));
 
 -- ================================================================
 -- 6. ACTIVITY LOG
@@ -233,17 +354,17 @@ alter table public.activity_log enable row level security;
 drop policy if exists "staff can read activity_log" on public.activity_log;
 create policy "staff can read activity_log"
 on public.activity_log for select to authenticated
-using (public.is_studio_owner() or public.has_staff_permission('manageStaff'));
+using (public.is_studio_owner(activity_log.studio_id) or public.has_staff_permission('manageStaff', activity_log.studio_id));
 
 drop policy if exists "staff can append activity_log" on public.activity_log;
 create policy "staff can append activity_log"
 on public.activity_log for insert to authenticated
 with check (
-  public.is_studio_owner()
-  or public.has_staff_permission('manageStaff')
-  or public.has_staff_permission('manageGalleries')
-  or public.has_staff_permission('uploadPhotos')
-  or public.has_staff_permission('viewFinances')
+  public.is_studio_owner(activity_log.studio_id)
+  or public.has_staff_permission('manageStaff', activity_log.studio_id)
+  or public.has_staff_permission('manageGalleries', activity_log.studio_id)
+  or public.has_staff_permission('uploadPhotos', activity_log.studio_id)
+  or public.has_staff_permission('viewFinances', activity_log.studio_id)
 );
 
 -- ================================================================
@@ -315,8 +436,8 @@ alter table public.galleries enable row level security;
 drop policy if exists "staff can manage galleries" on public.galleries;
 create policy "staff can manage galleries"
 on public.galleries for all to authenticated
-using (auth.uid() = owner_id or public.is_studio_owner() or public.has_staff_permission('manageGalleries'))
-with check (auth.uid() = owner_id or public.is_studio_owner() or public.has_staff_permission('manageGalleries'));
+using (auth.uid() = owner_id or public.is_studio_owner(galleries.studio_id) or public.has_staff_permission('manageGalleries', galleries.studio_id))
+with check (auth.uid() = owner_id or public.is_studio_owner(galleries.studio_id) or public.has_staff_permission('manageGalleries', galleries.studio_id));
 
 create table if not exists public.albums (
   id uuid primary key default gen_random_uuid(),
@@ -343,7 +464,7 @@ using (
   exists (
     select 1 from public.galleries g
     where g.id = albums.gallery_id
-      and (g.owner_id = auth.uid() or public.is_studio_owner() or public.has_staff_permission('manageGalleries'))
+      and (g.owner_id = auth.uid() or public.is_studio_owner(g.studio_id) or public.has_staff_permission('manageGalleries', g.studio_id))
   )
 );
 
@@ -355,7 +476,34 @@ create table if not exists public.curation_lists (
   created_at timestamptz not null default now()
 );
 
+-- One list per (gallery, intent) — 'favorites' is the only intent the
+-- client UI exposes today, but src/sync/selection.ts already types
+-- 'final_delivery' | 'album_selection' | 'print_selection' too, so this
+-- is sized for that rather than hard-coding a single Favorites list.
+alter table public.curation_lists add column if not exists intent text not null default 'favorites'
+  check (intent in ('favorites', 'final_delivery', 'album_selection', 'print_selection'));
+
+-- No route in worker/index.ts reads or writes curation_lists/curation_items
+-- today (only apply_gallery_selection_mutations() below does), so this
+-- assumes no gallery already has more than one row here. If this repo
+-- has been used to test-write curation_lists by hand outside the app,
+-- this index creation will fail loudly rather than silently pick a
+-- winner — resolve the duplicate row(s) for that gallery_id before
+-- re-running.
+create unique index if not exists idx_curation_lists_gallery_intent on public.curation_lists(gallery_id, intent);
+
 alter table public.curation_lists enable row level security;
+
+drop policy if exists "staff can manage curation lists" on public.curation_lists;
+create policy "staff can manage curation lists"
+on public.curation_lists for all to authenticated
+using (
+  exists (
+    select 1 from public.galleries g
+    where g.id = curation_lists.gallery_id
+      and (g.owner_id = auth.uid() or public.is_studio_owner(g.studio_id) or public.has_staff_permission('manageGalleries', g.studio_id))
+  )
+);
 
 create table if not exists public.curation_items (
   id uuid primary key default gen_random_uuid(),
@@ -368,7 +516,22 @@ create table if not exists public.curation_items (
   constraint curation_items_list_photo_unique unique (list_id, photo_id)
 );
 
+create index if not exists idx_curation_items_list_id on public.curation_items(list_id);
+create index if not exists idx_curation_items_photo_id on public.curation_items(photo_id);
+
 alter table public.curation_items enable row level security;
+
+drop policy if exists "staff can manage curation items" on public.curation_items;
+create policy "staff can manage curation items"
+on public.curation_items for all to authenticated
+using (
+  exists (
+    select 1 from public.curation_lists cl
+    join public.galleries g on g.id = cl.gallery_id
+    where cl.id = curation_items.list_id
+      and (g.owner_id = auth.uid() or public.is_studio_owner(g.studio_id) or public.has_staff_permission('manageGalleries', g.studio_id))
+  )
+);
 
 -- ================================================================
 -- 8. PHOTOS
@@ -418,7 +581,7 @@ using (
   exists (
     select 1 from public.galleries g
     where g.id = photos.gallery_id
-      and (g.owner_id = auth.uid() or public.is_studio_owner() or public.has_staff_permission('manageGalleries') or public.has_staff_permission('uploadPhotos'))
+      and (g.owner_id = auth.uid() or public.is_studio_owner(g.studio_id) or public.has_staff_permission('manageGalleries', g.studio_id) or public.has_staff_permission('uploadPhotos', g.studio_id))
   )
 );
 
@@ -557,6 +720,114 @@ revoke all on function public.record_client_payment(uuid, numeric) from public, 
 revoke all on function public.record_gallery_payment(uuid, numeric) from public, anon, authenticated;
 grant execute on function public.record_client_payment(uuid, numeric) to authenticated;
 grant execute on function public.record_gallery_payment(uuid, numeric) to authenticated;
+
+-- ================================================================
+-- 11. GALLERY SELECTION SYNC (SECURITY DEFINER, token-gated)
+-- Backs POST /api/g/:token/selection/sync — replays the client's
+-- offline outbox (src/sync/outbox.ts) into curation_items. Token-gated
+-- like gallery_by_token above, not staff-authenticated, so every check
+-- a normal authenticated write would get from RLS is done by hand here:
+-- gallery must be live and not expired, selection_enabled must be true,
+-- each photo_id must actually belong to this gallery, and selection_limit
+-- (if set) is enforced per intent. Unknown mutation types or intents are
+-- silently skipped rather than raising, so one bad entry in a batch
+-- doesn't fail the rest of an offline queue's replay.
+-- ================================================================
+
+create or replace function public.apply_gallery_selection_mutations(p_token text, p_mutations jsonb)
+returns table (selected_photo_id uuid)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_gallery record;
+  v_mutation jsonb;
+  v_photo_id uuid;
+  v_intent text;
+  v_type text;
+  v_list_id uuid;
+  v_current_count integer;
+begin
+  select g.id, g.selection_enabled, g.selection_limit
+  into v_gallery
+  from public.galleries g
+  where g.access_token = p_token
+    and g.status not in ('DISABLED', 'ARCHIVED')
+    and (g.expiration_date is null or g.expiration_date > now())
+  limit 1;
+
+  if v_gallery.id is null then
+    raise exception 'Gallery not found or inactive.';
+  end if;
+
+  if not v_gallery.selection_enabled then
+    raise exception 'Selections are disabled for this gallery.';
+  end if;
+
+  if jsonb_typeof(p_mutations) is distinct from 'array' then
+    raise exception 'Mutations payload must be an array.';
+  end if;
+
+  for v_mutation in select * from jsonb_array_elements(p_mutations)
+  loop
+    v_type := v_mutation ->> 'type';
+    v_intent := coalesce(v_mutation -> 'payload' ->> 'intent', 'favorites');
+
+    if v_type not in ('SELECT_PHOTO', 'UNSELECT_PHOTO') then
+      continue;
+    end if;
+
+    if v_intent not in ('favorites', 'final_delivery', 'album_selection', 'print_selection') then
+      continue;
+    end if;
+
+    begin
+      v_photo_id := (v_mutation -> 'payload' ->> 'photoId')::uuid;
+    exception when others then
+      continue;
+    end;
+
+    if not exists (select 1 from public.photos p where p.id = v_photo_id and p.gallery_id = v_gallery.id) then
+      continue;
+    end if;
+
+    insert into public.curation_lists (gallery_id, name, intent, selection_limit)
+    values (v_gallery.id, initcap(replace(v_intent, '_', ' ')), v_intent, v_gallery.selection_limit)
+    on conflict (gallery_id, intent) do nothing;
+
+    select id into v_list_id
+    from public.curation_lists
+    where gallery_id = v_gallery.id and intent = v_intent
+    limit 1;
+
+    if v_type = 'SELECT_PHOTO' then
+      if v_gallery.selection_limit is not null then
+        select count(*) into v_current_count from public.curation_items where list_id = v_list_id;
+        if v_current_count >= v_gallery.selection_limit
+           and not exists (select 1 from public.curation_items ci where ci.list_id = v_list_id and ci.photo_id = v_photo_id) then
+          continue;
+        end if;
+      end if;
+
+      insert into public.curation_items (list_id, photo_id)
+      values (v_list_id, v_photo_id)
+      on conflict (list_id, photo_id) do nothing;
+    else
+      delete from public.curation_items ci where ci.list_id = v_list_id and ci.photo_id = v_photo_id;
+    end if;
+  end loop;
+
+  return query
+    select ci.photo_id as selected_photo_id
+    from public.curation_items ci
+    join public.curation_lists cl on cl.id = ci.list_id
+    where cl.gallery_id = v_gallery.id;
+end;
+$$;
+
+revoke all on function public.apply_gallery_selection_mutations(text, jsonb) from public, anon, authenticated;
+grant execute on function public.apply_gallery_selection_mutations(text, jsonb) to anon, authenticated;
 
 -- ================================================================
 -- INDEXES FOR MULTI-TENANT QUERY OPTIMIZATION

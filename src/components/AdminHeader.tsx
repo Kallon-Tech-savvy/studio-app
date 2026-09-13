@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { supabase } from '../lib/supabase'
@@ -11,9 +12,16 @@ interface AdminHeaderProps {
 export function AdminHeader({
   staff,
 }: AdminHeaderProps) {
+  const [signingOut, setSigningOut] = useState(false)
   const displayName =
     staff.name ||
     staff.email.split('@')[0]
+
+  async function handleSignOut() {
+    setSigningOut(true)
+    const { error } = await supabase.auth.signOut()
+    if (error) setSigningOut(false)
+  }
 
   return (
     <header className="admin-header">
@@ -51,11 +59,10 @@ export function AdminHeader({
         <button
           type="button"
           className="admin-button admin-button--secondary"
-          onClick={() =>
-            supabase.auth.signOut()
-          }
+          onClick={handleSignOut}
+          disabled={signingOut}
         >
-          Sign out
+          {signingOut ? 'Signing out…' : 'Sign out'}
         </button>
       </div>
     </header>

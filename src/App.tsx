@@ -55,6 +55,18 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [staffAccess, setStaffAccess] = useState<StaffMember | null>(null)
   const [staffError, setStaffError] = useState<string | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
+
+  async function handleSignOut() {
+    setSigningOut(true)
+    setStaffError(null)
+
+    const { error: signOutError } = await supabase.auth.signOut()
+    if (signOutError) {
+      setStaffError(signOutError.message)
+      setSigningOut(false)
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -201,8 +213,13 @@ export default function App() {
               ask an owner or admin to turn on your permissions from the Team tab.
             </p>
           </div>
-          <button className="btn btn-secondary" onClick={() => supabase.auth.signOut()}>
-            Sign out
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
       ) : (
