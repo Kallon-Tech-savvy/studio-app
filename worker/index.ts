@@ -133,7 +133,17 @@ function isAllowedImageType(mimeType: string): boolean {
 }
 
 const TOKEN_FORMAT = /^[a-f0-9]{32,64}$/i
+const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const GALLERY_STATUSES = ['DRAFT', 'PROCESSING', 'READY', 'PUBLISHED', 'DISABLED', 'ARCHIVED'] as const
+const SELECTION_INTENTS = new Set(['favorites', 'final_delivery', 'album_selection', 'print_selection'])
+const SELECTION_MUTATION_TYPES = new Set(['SELECT_PHOTO', 'UNSELECT_PHOTO'])
+const MAX_SELECTION_MUTATIONS_PER_SYNC = 200
+
+type SelectionMutationBody = {
+  id?: unknown
+  type?: unknown
+  payload?: { photoId?: unknown; intent?: unknown } | null
+}
 
 type GalleryWriteBody = {
   title?: string
@@ -1245,6 +1255,72 @@ app.get('/api/g/:token/photos/:photoId', async (c) => {
     headers.set('content-disposition', `attachment; filename="frame-${c.req.param('photoId')}.jpg"`)
   }
   return new Response(object.body, { headers })
+})
+
+// ── 11. Selection sync (offline-first outbox replay) ────────────────
+// The client gallery queues SELECT_PHOTO/UNSELECT_PHOTO mutations
+// locally while offline (see src/sync/outbox.ts) and replays the
+// queue here once back online. Token-gated like the other /api/g/*
+// routes above, not staff-authenticated, so every field is validated
+// here before it reaches Postgres — and re-validated again inside
+// apply_gallery_selection_mutations() (token liveness, selection_enabled,
+// photo-belongs-to-gallery, selection_limit) since a SECURITY DEFINER
+// RPC can't assume its caller already checked those.
+app.post('/api/g/:token/selection/sync', async (c) => {
+  const token = c.req.param('token')
+  if (!TOKEN_FORMAT.test(token)) return c.json({ error: 'Gallery not found or inactive' }, 404)
+
+  let body: { mutations?: unknown }
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid request body.' }, 400)
+  }
+
+  const rawMutations = Array.isArray(body.mutations) ? (body.mutations as SelectionMutationBody[]) : []
+  if (rawMutations.length === 0) return c.json({ synced: 0, selected: [] })
+  if (rawMutations.length > MAX_SELECTION_MUTATIONS_PER_SYNC) {
+    return c.json({ error: 'Too many selection changes in one sync — try again in smaller batches.' }, 400)
+  }
+
+  const sanitized: { type: string; photoId: string; intent: string }[] = []
+  for (const entry of rawMutations) {
+    const type = typeof entry?.type === 'string' ? entry.type : null
+    const photoId = typeof entry?.payload?.photoId === 'string' ? entry.payload.photoId : null
+    const intent = typeof entry?.payload?.intent === 'string' ? entry.payload.intent : 'favorites'
+
+    if (!type || !photoId) continue
+    if (!SELECTION_MUTATION_TYPES.has(type)) continue
+    if (!UUID_FORMAT.test(photoId)) continue
+    if (!SELECTION_INTENTS.has(intent)) continue
+
+    sanitized.push({ type, photoId, intent })
+  }
+
+  if (sanitized.length === 0) {
+    return c.json({ error: 'No valid selection changes in this batch.' }, 400)
+  }
+
+  const supabase = getSupabaseClient(c.env)
+  const { data, error } = await supabase.rpc('apply_gallery_selection_mutations', {
+    p_token: token,
+    p_mutations: sanitized.map((m) => ({ type: m.type, payload: { photoId: m.photoId, intent: m.intent } })),
+  })
+
+  if (error) {
+    // apply_gallery_selection_mutations() raises its own friendly,
+    // client-safe messages via plain RAISE EXCEPTION ("Gallery not
+    // found or inactive.", "Selections are disabled for this
+    // gallery."), which Postgres reports as SQLSTATE P0001 — safe to
+    // surface directly. Anything else (Supabase unreachable, a real
+    // bug, a permissions error) is NOT one of those and must not leak
+    // its raw message to an anonymous, token-gated caller.
+    if (error.code === 'P0001') return c.json({ error: error.message }, 400)
+    return dbError(c, 'g/:token/selection/sync', error, 500)
+  }
+
+  const selected = Array.isArray(data) ? data.map((row: { selected_photo_id: string }) => row.selected_photo_id) : []
+  return c.json({ synced: sanitized.length, selected })
 })
 
 // Anything that isn't an /api/* route falls through to the built SPA.
